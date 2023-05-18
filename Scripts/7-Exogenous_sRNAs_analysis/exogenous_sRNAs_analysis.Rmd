@@ -1,0 +1,75 @@
+---
+title: "Exogenous sRNAs analysis"
+author: "Julia Corell Sierra"
+date: '2022-11-30'
+output: html_document
+---
+
+```{r}
+library("Biostrings")
+library("ggplot2")
+library("ggdist")
+library("tidyverse")
+library("ggforce")
+library("scales")
+library("ggbreak")
+```
+
+In this script we'll analyse those sRNAs that can not be annotated by Unitas. We will use centrifuge to annotate the sequences greater than 20 nt with a db of human genome, prokaryotic genomes, and viral genomes including 106 SARS-CoV-2 complete genomes. 
+
+First, we have to read the multifasta containing every sequence unannotated from every sample (generated with the command `cat T* > concat_noanno.fa` inside the directory where the files of unannnotated seqs). We'll remove duplicates and assign each sequence its ID.
+
+```{r}
+unanno_data <- readDNAStringSet("path/to/annotation_results/unitas_no-anno/concat_noanno.fa")
+ID_dict <- read.table("/path/to/Additional_data/all_sRNA_homo_sapiens.tsv", sep="\t", header=FALSE)
+counts = names(unanno_data)
+sequence = paste(unanno_data)
+unanno_df <- data.frame(counts, sequence)
+unique_seqs <- unique(unanno_df$sequence)
+unique_seqs_noN <- unique_seqs[which(!grepl("N", unique_seqs))]
+
+unanno_withID <- data.frame(matrix(nrow=length(unique_seqs_noN), ncol=1))
+colnames(unanno_withID) <- c("seq")
+unanno_withID$seq <- unique_seqs_noN
+
+unanno_withID <- merge(unanno_withID, ID_dict, by.x="seq", by.y="V2", all.x=TRUE)
+unanno_withID <- unanno_withID[,c(2,1)]
+colnames(unanno_withID) <- c("ID", "seq")
+unanno_withID$ID <- paste0(">",unanno_withID$ID)
+write.table(unanno_withID, "/path/to/exogenous_sRNAs_results/unannotated_sRNAs_unique_seqs.fa", sep="\n", col.names = FALSE, row.names = FALSE, quote= FALSE)
+rm(list = c("ID_dict", "unanno_data", "unanno_df", "counts", "sequence", "unique_seqs", "unique_seqs_noN"))
+```
+
+`Unannotated_sRNAs_unique_seqs.fa` will be the input used by Centrifuge. 
+
+Load the results of the Centrifuge classifier:
+```{r}
+cfg_anno <- read.table("/path/to/exogenous_sRNAs_results/unannotated_exogenous_sRNA_k1.out", sep="\t", header=TRUE)
+```
+
+Remove the uninformative taxIDs (9606 -> human, 0 -> unclassified)
+```{r}
+cfg_anno_filt <- cfg_anno %>%
+  dplyr::filter(taxID != 9606) %>%
+  dplyr::filter(taxID != 0) %>%
+  dplyr::filter(taxID!=1)
+write.table(cfg_anno_filt, "/path/to/exogenous_sRNAs_results/centrifuge_anno_filt.tsv", sep="\t", row.names=FALSE, quote=FALSE)
+```
+
+In the same directory we execute `cat centrifuge_anno_filt.tsv | awk '{print $3}' | tail -n +2 | sort | uniq > taxIDs_centrifuge.txt`, to extract the list of taxIDs identified by centrifuge. Now we load the taxIDs in the NCBI's tax identifier (https://www.ncbi.nlm.nih.gov/Taxonomy/TaxIdentifier/tax_identifier.cgi) to obtain the tax name. To make the file easier to read, replace "\t|" with "\t" in the file tax_report.txt.
+
+```{r}
+tax_report <- read.table("/path/to/exogenous_sRNAs_results/tax_report.txt", sep="\t", header=TRUE, quote="")
+#ID_dict <- read.table("/path/to/Additional_data/all_sRNA_homo_sapiens.tsv", sep="\t", header=FALSE)
+tax_report$primary.taxid <- NULL
+tax_report$code <- NULL
+
+cfg_anno_final <- cfg_anno_filt[,c("readID", "seqID", "taxID")]
+cfg_anno_final <- merge(cfg_anno_filt, ID_dict, by.x="readID", by.y="V1", all.x=TRUE)
+colnames(cfg_anno_final) <- c("ID", "seqID", "taxID", "score", "X2ndBestScore", "hitLength", "queryLength", "numMatches", "Seq")
+cfg_anno_final <- cfg_anno_final[, c("ID", "Seq", "taxID")]
+cfg_anno_final <- merge(cfg_anno_final, tax_report, by.x="taxID", by.y="taxid", all.x=TRUE)
+cfg_anno_final <- cfg_anno_final[,c("ID", "Seq", "taxID","taxname")]
+write.table(cfg_anno_final, "/path/to/exogenous_sRNAs_results/centrifuge_anno_final.tsv", sep="\t", row.names=FALSE, quote=FALSE)
+```
+

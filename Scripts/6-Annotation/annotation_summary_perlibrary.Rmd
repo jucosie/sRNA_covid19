@@ -1,0 +1,82 @@
+---
+title: "Annotation statistics"
+author: "Julia Corell Sierra"
+date: '2023-02-15'
+output: html_document
+---
+
+```{r}
+library("Biostrings")
+library("tidyverse")
+library("data.table")
+```
+
+Script to obtain the Annotation statistics showed in Supplemental Table 2. 
+```{r}
+counts_table <- read.table("/path/to/results/03-Fusion_tables/Fusion_abs-outer_with0.csv", sep=",", header=TRUE)
+anno_file <- read.table("/path/to/annotation_results/curated_unitas_withtiny_annotation.tsv", sep="\t", header=TRUE)
+cfg_anno <- read.table("/path/to/annotation_results/09-Exogenous_sRNAs_analysis/centrifuge_anno_final.tsv", sep="\t", header=TRUE, quote="")
+```
+
+```{r}
+dt_counts <- data.table(counts_table)
+rm(counts_table)
+dt_anno <- data.table(anno_file)
+rm(anno_file)
+dt_cfg <- data.table(cfg_anno)
+rm(cfg_anno)
+gc()
+```
+
+Get counts of sequences annotated by Unitas and our annotation of tinyRNAs.
+```{r}
+dt_counts_filt <- dt_counts[seq %in% dt_anno$Seq, ]
+dt_counts_filt <- dt_counts_filt %>%
+      bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+gc()
+fwrite(dt_counts_filt, "/path/to/annotation_results/Summary/summary_noncoding_ann.tsv", sep="\t", row.names=FALSE)
+```
+
+Get counts of sequences annotated as exogenous by Centrifuge.
+```{r}
+dt_counts_exo <- dt_counts[seq %in% dt_cfg$Seq, ]
+dt_counts_exo <- dt_counts_exo %>%
+      bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+gc()
+fwrite(dt_counts_exo, "/path/to/annotation_results/Summary/summary_exogen_ann.tsv", sep="\t", row.names=FALSE)
+```
+
+Get counts of sequences annotated as tinyRNAs.
+
+```{r}
+dt_tiny <- dt_anno[dt_anno$RNA_class == "tyRNA",]
+dt_counts_tiny <- dt_counts[seq %in% dt_tiny$Seq,]
+dt_counts_tiny <- dt_counts_tiny %>%
+  bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+gc()
+fwrite(dt_counts_tiny, "/path/to/annotation_results/Summary/summary_tiny_ann.tsv", sep="\t", row.names=FALSE)
+```
+
+In this case we want RPM data.
+```{r}
+RPM_table <- read.table("/path/to/results/03-Fusion_tables/Fusion_RPMs-outer_with0.csv", sep=",", header=TRUE)
+dt_RPM <- data.table(RPM_table)
+rm(RPM_table)
+gc()
+```
+```{r}
+dt_RPM_tiny <- dt_RPM[seq %in% dt_tiny$Seq,]
+dt_RPM_tiny <- dt_RPM_tiny %>%
+  bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+gc()
+fwrite(dt_RPM_tiny, "/path/to/annotation_results/Summary/summary_tiny_RPM.tsv", sep="\t", row.names=FALSE)
+```
+

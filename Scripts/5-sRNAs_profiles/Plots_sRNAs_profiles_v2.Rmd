@@ -1,0 +1,173 @@
+---
+title: "sRNAs profiles Homo sapiens and SARS-CoV-2"
+author: "Pascual Villalba"
+date: "19/2/2021"
+output: html_document
+---
+
+## 0. LOAD THE LIBRARIES AND OPTIONS
+
+```{r}
+library(dplyr)
+options(dplyr.print_max = 1e9)
+require(ggplot2)
+library(ggsci)
+library(ggExtra)
+```
+
+## 1. CREATE THE DIRECTORY WHERE THE PLOTS WILL BE SAVED
+
+```{r}
+if (!dir.exists("/path/to/results/04-library_profiles")){  # Creates the directory if it does not exist.
+  dir.create("/path/to/results/04-library_profiles")
+}
+```
+
+## 2. CREATE A LIST WITH THE ABSOLUTE PATH OF THE CSV FILES WITH ABSOLUTE AND RPM COUNTS
+
+```{r}
+## Absolute path of absolute counts.
+exp_counts  = paste0(list.files("/path/to/results/01-library_absolute_counts", recursive = T, full.names = T))
+## RPMs path of RPM counts.
+exp_RPMs  = paste0(list.files("/path/to/results/02-library_RPM_counts", recursive = T, full.names = T))
+```
+
+## 3. CREATE THE TABLE DTFULL
+
+Build a table containing the counts and frequence of the sequence lengths per library. This table will be saved as RPMs_and_Freq_by_ntds.tsv.
+
+```{r}
+## Number of iteration. It's necessary to build the global table.
+counts= 0
+
+for(i in 1:length(exp_counts)){
+  ## Each iteration is a sample (library).
+  ##i = 1
+  file_counts = exp_counts[i]
+  file_RPMs = exp_RPMs[i]
+  
+  ## Obtain the info: time (T1), sample (HSVd_1), group (HSVd) and n_group (1).
+  path_file_list = unlist(strsplit(file_counts, "/"))
+  time = path_file_list[length(path_file_list)-2]
+  name_file = path_file_list[length(path_file_list)]
+  sample = unlist(strsplit(name_file, ".", fixed = TRUE))[1]
+  group = unlist(strsplit(sample, "-"))[1]
+  n_group = unlist(strsplit(sample, "-"))[2]
+  
+  ## Load the absolute and RPM counts table.
+  counts_table = read.csv(file_counts, sep=",", header = T, stringsAsFactors = F)
+  RPMs_table = read.csv(file_RPMs, sep=",", header = T, stringsAsFactors = F)
+  
+  ## Create a empty table with the counts, RPMs and percentage by the number of nucleotides for each sample.
+  dt = data.frame(nt=c(12:34), stringsAsFactors = F)
+  dt$counts = 0
+  dt$total = 0
+  dt$RPM = 0
+  dt$percentage = 0
+  dt$sample = sample
+  dt$group = group
+  dt$n_group = n_group
+  dt$time = time
+  
+  ## Group the absolute and RPM counts of the absolute and RPM counts table by number of nucleotides.
+  for(j in 1:dim(dt)[1]){
+    # j=1
+    subset_counts = counts_table[nchar(counts_table$seq) == dt$nt[j],] # Filtrar la tabla por aquellas secuencias de longitud 12-34.
+    dt$counts[j] = sum(subset_counts$counts)
+    subset_RPMs = RPMs_table[nchar(RPMs_table$seq) == dt$nt[j],] # Filtrar la tabla por aquellas secuencias de longitud 12-34.
+    dt$RPM[j] = sum(subset_RPMs$RPMs)
+  }
+  
+  ## Calculate the library size.
+  sumtotal = sum(dt$counts)
+  dt$total = sumtotal
+  
+  ## Calculate the percentage by number of nucleotides.
+  dt$percentage = (dt$counts/dt$total)*100
+  
+  ## Build the global table. Add the table created in each iteration.
+  if(counts == 0){
+    dtfull = dt
+    counts = counts + 1
+  }else{
+    dtfull = rbind(dtfull, dt)
+  }
+}
+
+## Save the table.
+write.table(dtfull,"/path/to/results/04-library_profiles/RPMs_and_Freq_by_ntds.tsv", 
+            sep="\t", dec=",", row.names = F, quote = F)
+
+## Show dtfull
+dtfull
+
+## Remove the data and values of the R environment.
+#rm(list = c('counts_table', 'RPMs_table', 'dt', 'i', 'j', 'name_file', 'exp_counts', 'exp_RPMs', 'file_counts', 'file_RPMs', 'group', 'n_group', 'path_file_list', 'sample', 'sumtotal', 'time', 'subset_counts', 'subset_RPMs', 'counts'))
+```
+
+
+
+## 4. CREATE THE TABLE DTFULL_FINAL
+
+The same info summarized by group. 
+```{r}
+## This is the function for calculating the standard deviation.
+se = function(x) sqrt(var(x)/length(x)) 
+
+## Group the previous table by group (HSVd), time (T1) and nt (20)
+dtfull_FINAL = dtfull %>% 
+  group_by(group, time, nt) %>%
+  summarise(
+    mean.RPM = mean(RPM), ## Mean RPMs.
+    se.RPM = se(RPM), ## Standard deviation of RPMs.
+    mean.Relative = mean(percentage), ## Mean of percentage.
+    se.Relative = se(percentage)) ## Standard deviation of percentage. 
+
+## Save the table.
+write.table(dtfull_FINAL,"/path/to/results/04-library_profiles/RPMs_and_Freq_by_ntds-FINAL.tsv",
+            sep="\t", dec=",", row.names = F, quote = F)
+
+## Show dtfull_FINAL
+dtfull_FINAL
+```
+
+
+## 5. PLOTS
+
+
+```{r}
+## Convert the group to factor.
+dtfull_FINAL$group <- ifelse(dtfull_FINAL$group == "acute", "Severe", dtfull_FINAL$group)
+dtfull_FINAL$group <- ifelse(dtfull_FINAL$group == "mild", "Moderate", dtfull_FINAL$group)
+dtfull_FINAL$group <- ifelse(dtfull_FINAL$group == "control", "Control", dtfull_FINAL$group)
+dtfull_FINAL$group = factor(dtfull_FINAL$group, levels=c("Control","Severe","Moderate"))
+```
+
+
+### 5.1 PLOT WITH A FACET_WRAP BY TIME
+
+```{r}
+options(scipen = 10)
+time_names <-  c("Control", "T1", "T2")
+names(time_names) <- c("T0", "T1", "T2")
+
+ggplot(dtfull_FINAL, aes(x=nt, y=mean.RPM, ymin=mean.RPM-se.RPM, ymax=mean.RPM+se.RPM, fill=group)) +
+  geom_bar(position=position_dodge(), aes(y=mean.RPM), stat="identity") +
+  geom_errorbar (position=position_dodge(width=0.9), colour="black")+
+  scale_x_discrete(breaks=c(12:34),limits=12:34)+
+  scale_fill_lancet(alpha = 0.7)+
+  theme_bw()+removeGrid( x = T, y = T  )+ xlab("Read size (nt)")+ ylab("RPM")+
+  #geom_segment(aes(x = 19, y = 0, xend = 26, yend = 0), linetype=2, colour = "darkgray", size = 0.4 )+
+  facet_wrap( ~ time, ncol=3, labeller = as_labeller(time_names))+
+  theme(legend.position="bottom", axis.text.x = element_text(angle=65, vjust=0.6), plot.title = element_text(hjust = 0.5)) +
+  theme(legend.title = element_blank())
+
+## Save the plot.
+ggsave("/path/to/results/04-library_profiles/ALL-sRNAs_profile_RPMs_1_hor.png", height = 3.25, width = 9, dpi = 300)
+```
+
+
+
+
+
+

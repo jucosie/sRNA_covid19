@@ -1,0 +1,36 @@
+---
+title: "Tiny RNAs analysis"
+author: "Julia Corell Sierra"
+date: '2022-12-13'
+output: html_document
+---
+
+```{r}
+library("ggplot2")
+library("tidyverse")
+```
+
+We want to check if the fragments of miRNAs annotated as miRNA-like are actually "tinyRNAs" (perfect match of the 5' extreme). This sequences will be aligned using the script "tinyRNAs_alignment.sh" findable in this folder.
+```{r}
+anno_file <- read.table("/path/to/annotation_results/curated_unitas_annotation.tsv", sep="\t", header=TRUE)
+small_seqs <- anno_file[anno_file$Length == 13 | anno_file$Length == 14,]
+small_seqs <- small_seqs[small_seqs$RNA_class == "miRNA-like",]
+#Remove those that aren't perfect matches
+small_seqs <- small_seqs[!grepl("\\(", small_seqs$RNA_ID),]
+small_seqs <- small_seqs[,c(1,2)]
+small_seqs$ID <- paste0(">",small_seqs$ID)
+write.table(small_seqs, "/path/to/annotation_results/tiny_RNAs/sequences_tocheck_tiny.fa", sep="\n", col.names = FALSE, row.names = FALSE, quote= FALSE)
+```
+
+We have aligned with scram to the miRBase mature db. And now we want to select only those sequences that align to mature miRNAs (+ strand) in the positions 1 or 2.
+
+```{r}
+scram_13 <- read.table("/path/to/annotation_results/tiny_RNAs/tinyRNA_13.csv", sep=",", header=TRUE)
+scram_14 <- read.table("/path/to/annotation_results/tiny_RNAs/tinyRNA_14.csv", sep=",", header=TRUE)
+scram_results <- rbind(scram_13, scram_14)
+scram_results_nodup <- scram_results[!duplicated(scram_results$sRNA),]
+scram_results_nodup <- scram_results_nodup[scram_results_nodup$Strand == "+",]
+scram_results_nodup <- scram_results_nodup[scram_results_nodup$Position == 1 | scram_results_nodup$Position == 2,]
+write.table(scram_results_nodup,"/path/to/annotation_results//tiny_RNA_table.tsv", sep="\t", col.names=TRUE, row.names=FALSE)
+```
+

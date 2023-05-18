@@ -1,0 +1,176 @@
+---
+title: "Differential Expression Analsysis sRNAs"
+author: "Julia Corell Sierra"
+date: "27/4/2022"
+output: html_document
+---
+Load the libraries.
+```{r}
+library("DESeq2")
+library("ggplot2")
+library("tidyverse")
+```
+
+Low count filtering of the absolute counts matrix. 
+```{r}
+sampletable <- read.table("../../Additional_data/samplesheet.tsv", header=T, sep="\t")
+rownames(sampletable) <- sampletable$SampleName
+
+## Prior to loading the count matrix we have to use an awk command to replace every blank space with a 0
+## awk 'BEGIN { FS = OFS = "," } { for(i=1; i<=NF; i++) if($i ~ /^ *$/) $i = 0 }; 1' Fusion_abs-outer.csv > Fusion_abs-outer_with0.csv
+
+count_matrix <- read.csv("path/to/results/03-Fusion_tables/Fusion_abs-outer_with0.csv", header=T, row.names=1)
+colnames(count_matrix) <- gsub("\\.", "-", colnames(count_matrix))
+
+## We perform the filtering at this level due to the huge size of the matrix: keep those rows which have >5 in at least
+## 5 samples of some of the groups
+
+# A. Control (mock). The first column is the sequences.
+ini = 1
+end = ncol(count_matrix)-32
+keep1 = rowSums(count_matrix[ini:end]>=5) >= 5
+groupControl = count_matrix[keep1,]
+
+# B. T1acute
+ini_t1acute = end +1
+end_t1acute = ini_t1acute + 7
+keep2 = rowSums(count_matrix[ini_t1acute:end_t1acute]>=5) >= 5
+groupCase1 = count_matrix[keep2,]
+
+# B. T1mild
+ini_t1mild = end_t1acute +1
+end_t1mild = ini_t1mild + 7
+keep3 = rowSums(count_matrix[ini_t1mild:end_t1mild]>=5) >= 5
+groupCase2 = count_matrix[keep3,]
+
+# B. T2acute
+ini_t2acute = end_t1mild + 1
+end_t2acute = ini_t2acute + 7
+keep4 = rowSums(count_matrix[ini_t2acute:end_t2acute]>=5) >= 5
+groupCase3 = count_matrix[keep4,]
+
+# B. T1mild
+ini_t2mild = end_t2acute + 1
+end_t2mild = ini_t2mild + 7
+keep5 = rowSums(count_matrix[ini_t2mild:end_t2mild]>=5) >= 5
+groupCase4 = count_matrix[keep5,]
+
+# Join the tables of sRNAs kept in Control and kept in Stress. And remove the sRNAs duplicated (kept in both conditions).
+counts_table_final = rbind(groupControl, groupCase1, groupCase2, groupCase3, groupCase4)
+counts_table_final = counts_table_final[!duplicated(counts_table_final), ]
+
+colnames(counts_table_final) <- gsub("\\.", "-", colnames(counts_table_final))
+
+counts_table_final <- counts_table_final %>%
+  rownames_to_column(var = "seq")
+
+write.table(counts_table_final, "/path/to/results/03-Fusion_tables/Filtered_abs-outer_filt5.tsv", sep = "\t", quote = F, row.names = F)
+
+rm(count_matrix)
+
+counts_table_final <- counts_table_final %>%
+  column_to_rownames(var="seq")
+
+rm(list=c("keep1", "keep2", "keep3", "keep4", "keep5"))
+rm(list=c("groupControl", "groupCase1", "groupCase2", "groupCase3", "groupCase4"))
+```
+
+
+### Differential expression analysis
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = counts_table_final,
+                                  colData = sampletable,
+                                  design = ~ Group)
+dds$Group <- relevel(dds$Group, ref ="T0_control")
+```
+
+Fit statistical model.
+
+```{r}
+dds_2 <- DESeq(dds)
+
+save(dds_2, file = "/path/to/DEA_results/DESeq_object.RData")
+```
+
+
+### Differential expression analysis
+
+We perform differential testing for every condition against the control group. 
+```{r}
+padj.cutoff <- 0.05
+
+res_T1acute <- results(dds_2, name ="Group_T1_acute_vs_T0_control", lfcThreshold = 0.585, alpha=0.05)
+shrunk_T1acute <- lfcShrink(dds_2, coef="Group_T1_acute_vs_T0_control", res=res_T1acute)
+
+res_T1acute_tb <- res_T1acute %>%
+  data.frame() %>%
+  rownames_to_column(var="seq") %>% 
+  as_tibble()
+
+res_T1acute_tb$lfcShrunk <- shrunk_T1acute$log2FoldChange
+res_T1acute_tb$lfcShrunkSE <- shrunk_T1acute$lfcSE
+
+sigT1acute <- res_T1acute_tb %>%
+  dplyr::filter(padj < padj.cutoff)
+
+write.table(res_T1acute_tb, "/path/to/DEA_results/results_DE_T1acute.tsv", sep = "\t", quote = F, row.names = F)
+```
+
+```{r}
+res_T1mild <- results(dds_2, name ="Group_T1_mild_vs_T0_control", lfcThreshold = 0.585, alpha=0.05)
+shrunk_T1mild <- lfcShrink(dds_2, coef="Group_T1_mild_vs_T0_control", res=res_T1mild)
+
+res_T1mild_tb <- res_T1mild %>%
+  data.frame() %>%
+  rownames_to_column(var="seq") %>% 
+  as_tibble()
+
+res_T1mild_tb$lfcShrunk <- shrunk_T1mild$log2FoldChange
+res_T1mild_tb$lfcShrunkSE <- shrunk_T1mild$lfcSE
+
+sigT1mild <- res_T1mild_tb %>%
+  dplyr::filter(padj < padj.cutoff)
+
+#Change NA values in padj with 1
+res_T1mild_tb$padj <- ifelse(is.na(res_T1mild_tb$padj), 1, res_T1mild_tb$padj)
+
+write.table(res_T1mild_tb, "/path/to/DEA_results/results_DE_T1mild.tsv", sep = "\t", quote = F, row.names = F)
+```
+
+```{r}
+res_T2acute <- results(dds_2, name = "Group_T2_acute_vs_T0_control", lfcThreshold = 0.585, alpha=0.05)
+shrunk_T2acute <- lfcShrink(dds_2, coef="Group_T2_acute_vs_T0_control", res=res_T2acute)
+
+res_T2acute_tb <- res_T2acute %>%
+  data.frame() %>%
+  rownames_to_column(var="seq") %>% 
+  as_tibble()
+
+res_T2acute_tb$lfcShrunk <- shrunk_T2acute$log2FoldChange
+res_T2acute_tb$lfcShrunkSE <- shrunk_T2acute$lfcSE
+
+sigT2acute <- res_T2acute_tb %>%
+  dplyr::filter(padj < padj.cutoff)
+
+write.table(res_T2acute_tb, "/path/to/DEA_results/results_DE_T2acute.tsv", sep = "\t", quote = F, row.names = F)
+```
+
+```{r}
+res_T2mild <- results(dds_2, name = "Group_T2_mild_vs_T0_control", lfcThreshold = 0.585, alpha=0.05)
+shrunk_T2mild <- lfcShrink(dds_2, coef="Group_T2_mild_vs_T0_control", res=res_T2mild)
+
+res_T2mild_tb <- res_T2mild %>%
+  data.frame() %>%
+  rownames_to_column(var="seq") %>% 
+  as_tibble()
+
+res_T2mild_tb$lfcShrunk <- shrunk_T2mild$log2FoldChange
+res_T2mild_tb$lfcShrunkSE <- shrunk_T2mild$lfcSE
+
+sigT2mild <- res_T2mild_tb %>%
+  dplyr::filter(padj < padj.cutoff)
+
+write.table(res_T2mild_tb, "/path/to/DEA_results/results_DE_T2mild.tsv", sep = "\t", quote = F, row.names = F)
+```
+

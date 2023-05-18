@@ -1,0 +1,655 @@
+---
+title: "tRNA analysis"
+author: "Julia Corell Sierra"
+date: '2023-01-13'
+output: html_document
+---
+
+In this script you'll find all the code necessary to produce the figures and tables related to the miRNA and tRNA analysis.
+```{r}
+library(tidyverse)
+library(DESeq2)
+library(ggbreak)
+```
+
+```{r}
+padj.cutoff <- 0.05
+anno_file <- read.table("/path/to/annotation_results/unitas_simplified_annnotation/unitas_complete_anno.txt", sep="\t", header=TRUE)
+RPMs_table <- read.table("/path/to/results/03-Fusion_tables/Filtered_RPMs-outer_filt5.tsv", sep="\t", header = TRUE)
+sampletable <- read.table("../../Additional_data/samplesheet.tsv", header=T, sep="\t")
+DE_T1_acute <- read.table("/path/to/DEA_results/results_DE_T1acute.tsv", sep="\t", header=TRUE)
+DE_T1_acute_sig <- DE_T1_acute %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T1_mild <- read.table("/path/to/DEA_results/results_DE_T1mild.tsv", sep="\t", header=TRUE)
+DE_T1_mild_sig <- DE_T1_mild %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T2_acute <- read.table("/path/to/DEA_results/results_DE_T2acute.tsv", sep="\t", header=TRUE)
+DE_T2_acute_sig <- DE_T2_acute %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T2_mild <- read.table("/path/to/DEA_results/results_DE_T2mild.tsv", sep="\t", header=TRUE)
+DE_T2_mild_sig <- DE_T2_mild %>%
+  dplyr::filter(padj < padj.cutoff)
+
+DE_T1_acute_sig_ann <- merge(DE_T1_acute_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+DE_T1_mild_sig_ann <-  merge(DE_T1_mild_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+DE_T2_acute_sig_ann <- merge(DE_T2_acute_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+DE_T2_mild_sig_ann <-  merge(DE_T2_mild_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+```
+
+
+```{r}
+DE_T1_acute_tRNA <- DE_T1_acute_sig_ann %>%
+  dplyr::filter(grepl("tRNA", DE_T1_acute_sig_ann$RNA_class))
+
+DE_T1_mild_tRNA <- DE_T1_mild_sig_ann %>%
+  dplyr::filter(grepl("tRNA", DE_T1_mild_sig_ann$RNA_class))
+
+DE_T2_acute_tRNA <- DE_T2_acute_sig_ann %>%
+  dplyr::filter(grepl("tRNA", DE_T2_acute_sig_ann$RNA_class))
+
+DE_T2_mild_tRNA <- DE_T2_mild_sig_ann %>%
+  dplyr::filter(grepl("tRNA", DE_T2_mild_sig_ann$RNA_class))
+
+#DE_tRNAs <- Reduce (union, list(DE_T1_acute_tRNA$seq, DE_T1_mild_tRNA$seq, DE_T2_acute_tRNA$seq, DE_T2_mild_tRNA$seq))
+```
+
+
+***
+
+#### LFC Boxplots supplemental figure
+
+Let's take a look at the tRNA sequences behavior. Supplemental Figure with the LFC of every tRNA.
+
+```{r}
+DE_T1_acute_tRNA$ID_DB_cut <- str_replace(DE_T1_acute_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T1_acute_tRNA$ID_DB_cut <- str_replace(DE_T1_acute_tRNA$ID_DB_cut, "tRNA-", "")
+DE_T1_acute_tRNA <- DE_T1_acute_tRNA %>%
+  filter(!grepl("MT", DE_T1_acute_tRNA$ID_DB_cut))
+
+DE_T2_acute_tRNA$ID_DB_cut <- str_replace(DE_T2_acute_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T2_acute_tRNA$ID_DB_cut <- str_replace(DE_T2_acute_tRNA$ID_DB_cut, "tRNA-", "")
+DE_T2_acute_tRNA <- DE_T2_acute_tRNA %>%
+  filter(!grepl("MT", DE_T2_acute_tRNA$ID_DB_cut))
+
+DE_T1_mild_tRNA$ID_DB_cut <- str_replace(DE_T1_mild_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T1_mild_tRNA$ID_DB_cut <- str_replace(DE_T1_mild_tRNA$ID_DB_cut, "tRNA-", "")
+DE_T1_mild_tRNA <- DE_T1_mild_tRNA %>%
+  filter(!grepl("MT", DE_T1_mild_tRNA$ID_DB_cut))
+
+DE_T2_mild_tRNA$ID_DB_cut <- str_replace(DE_T2_mild_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T2_mild_tRNA$ID_DB_cut <- str_replace(DE_T2_mild_tRNA$ID_DB_cut, "tRNA-", "")
+DE_T2_mild_tRNA <- DE_T2_mild_tRNA %>%
+  filter(!grepl("MT", DE_T2_mild_tRNA$ID_DB_cut))
+
+aa_list <- Reduce(union, list(DE_T1_acute_tRNA$ID_DB_cut, DE_T1_mild_tRNA$ID_DB_cut, DE_T2_acute_tRNA$ID_DB_cut, DE_T2_mild_tRNA$ID_DB_cut))
+aa_list <- sort(aa_list)
+```
+
+```{r}
+DE_T1_acute_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T1_acute_tRNA$tRNA_class), "3p-tRF", DE_T1_acute_tRNA$tRNA_class)
+
+DE_T1_acute_tRNA$ID_DB_cut <- factor(DE_T1_acute_tRNA$ID_DB_cut, levels= aa_list)
+
+##Alternative plot without misc-tRF and tRF-1
+DE_T1_acute_tRNA <- DE_T1_acute_tRNA %>%
+  filter(!grepl("tRF-1|misc-tRF", DE_T1_acute_tRNA$tRNA_class))
+##
+
+ggplot(DE_T1_acute_tRNA, aes(x=ID_DB_cut, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="#da6a65", alpha=0.7) +
+  geom_jitter(size=2, alpha=0.7, aes(shape= tRNA_class)) +
+  scale_shape_manual(values=c(17,19,2,1,8,5)) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Severe (T1) tRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("tRNA isotype")
+
+ggsave("/path/to/tRNA_results/T1_acute_tRNAs_aa_filt.png", height=5, width=15, dpi=600)
+```
+```{r}
+summary_table_tRNA_T1acute <- data.frame(tRNA=rep(unique(DE_T1_acute_tRNA$ID_DB_cut), each=length(unique(DE_T1_acute_tRNA$tRNA_class))), 
+                                         tRNA_type=rep(unique(DE_T1_acute_tRNA$tRNA_class), length(unique(DE_T1_acute_tRNA$ID_DB_cut))), 
+                                                       Up="NA", Down="NA")
+for (i in 1:nrow(summary_table_tRNA_T1acute)){
+  summary_table_tRNA_T1acute$Up[i] <- nrow(DE_T1_acute_tRNA[DE_T1_acute_tRNA$ID_DB_cut==summary_table_tRNA_T1acute$tRNA[i] & 
+                                                              DE_T1_acute_tRNA$tRNA_class==summary_table_tRNA_T1acute$tRNA_type[i] & 
+                                                              DE_T1_acute_tRNA$lfcShrunk > 0,])
+  summary_table_tRNA_T1acute$Down[i] <- nrow(DE_T1_acute_tRNA[DE_T1_acute_tRNA$ID_DB_cut==summary_table_tRNA_T1acute$tRNA[i] & 
+                                                              DE_T1_acute_tRNA$tRNA_class==summary_table_tRNA_T1acute$tRNA_type[i] & 
+                                                              DE_T1_acute_tRNA$lfcShrunk < 0,])
+}
+write.table(summary_table_tRNA_T1acute, "/path/to/tRNA_results/summary_table_tRNA_T1_acute.tsv", sep="\t", row.names=FALSE)
+```
+
+```{r}
+DE_T2_acute_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T2_acute_tRNA$tRNA_class), "3p-tRF", DE_T2_acute_tRNA$tRNA_class)
+
+DE_T2_acute_tRNA$ID_DB_cut <- factor(DE_T2_acute_tRNA$ID_DB_cut, levels= aa_list)
+
+##Alternative plot without misc-tRF and tRF-1
+DE_T2_acute_tRNA <- DE_T2_acute_tRNA %>%
+  filter(!grepl("tRF-1|misc-tRF", DE_T2_acute_tRNA$tRNA_class))
+##
+
+ggplot(DE_T2_acute_tRNA, aes(x=ID_DB_cut, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="#ED0000B2", alpha=0.7) +
+  geom_jitter(size=2, alpha=0.7, aes(shape= tRNA_class)) +
+  scale_shape_manual(values=c(19,2,1,8,5)) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Severe (T2) tRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("tRNA isotype")
+
+ggsave("/path/to/tRNA_results/T2_acute_tRNAs_aa_exp_filt.png", height=5, width=15, dpi=600)
+```
+```{r}
+summary_table_tRNA_T2acute <- data.frame(tRNA=rep(unique(DE_T2_acute_tRNA$ID_DB_cut), each=length(unique(DE_T1_acute_tRNA$tRNA_class))), 
+                                         tRNA_type=rep(unique(DE_T1_acute_tRNA$tRNA_class), length(unique(DE_T2_acute_tRNA$ID_DB_cut))), 
+                                                       Up="NA", Down="NA")
+for (i in 1:nrow(summary_table_tRNA_T2acute)){
+  summary_table_tRNA_T2acute$Up[i] <- nrow(DE_T2_acute_tRNA[DE_T2_acute_tRNA$ID_DB_cut==summary_table_tRNA_T2acute$tRNA[i] & 
+                                                              DE_T2_acute_tRNA$tRNA_class==summary_table_tRNA_T2acute$tRNA_type[i] & 
+                                                              DE_T2_acute_tRNA$lfcShrunk > 0,])
+  summary_table_tRNA_T2acute$Down[i] <- nrow(DE_T2_acute_tRNA[DE_T2_acute_tRNA$ID_DB_cut==summary_table_tRNA_T2acute$tRNA[i] & 
+                                                              DE_T2_acute_tRNA$tRNA_class==summary_table_tRNA_T2acute$tRNA_type[i] & 
+                                                              DE_T2_acute_tRNA$lfcShrunk < 0,])
+}
+write.table(summary_table_tRNA_T2acute, "/path/to/tRNA_results/summary_table_tRNA_T2_acute.tsv", sep="\t", row.names=FALSE)
+```
+
+```{r}
+DE_T1_mild_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T1_mild_tRNA$tRNA_class), "3p-tRF", DE_T1_mild_tRNA$tRNA_class)
+
+DE_T1_mild_tRNA$ID_DB_cut <- factor(DE_T1_mild_tRNA$ID_DB_cut, levels= aa_list)
+
+##Alternative plot without misc-tRF and tRF-1
+DE_T1_mild_tRNA <- DE_T1_mild_tRNA %>%
+  filter(!grepl("tRF-1|misc-tRF", DE_T1_mild_tRNA$tRNA_class))
+##
+
+ggplot(DE_T1_mild_tRNA, aes(x=ID_DB_cut, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="lightgreen", alpha=0.7) +
+  geom_jitter(size=2, alpha=0.7, aes(shape= tRNA_class)) +
+  scale_shape_manual(values=c(19,2,1,8)) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Moderate (T1) tRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("tRNA isotype")
+
+ggsave("/path/to/tRNA_results/T1_mild_tRNAs_aa_exp_filt.png", height=5, width=15, dpi=600)
+```
+```{r}
+summary_table_tRNA_T1mild <- data.frame(tRNA=rep(unique(DE_T1_mild_tRNA$ID_DB_cut), each=length(unique(DE_T1_acute_tRNA$tRNA_class))), 
+                                         tRNA_type=rep(unique(DE_T1_acute_tRNA$tRNA_class), length(unique(DE_T1_mild_tRNA$ID_DB_cut))), 
+                                                       Up="NA", Down="NA")
+for (i in 1:nrow(summary_table_tRNA_T1mild)){
+  summary_table_tRNA_T1mild$Up[i] <- nrow(DE_T1_mild_tRNA[DE_T1_mild_tRNA$ID_DB_cut==summary_table_tRNA_T1mild$tRNA[i] & 
+                                                              DE_T1_mild_tRNA$tRNA_class==summary_table_tRNA_T1mild$tRNA_type[i] & 
+                                                              DE_T1_mild_tRNA$lfcShrunk > 0,])
+  summary_table_tRNA_T1mild$Down[i] <- nrow(DE_T1_mild_tRNA[DE_T1_mild_tRNA$ID_DB_cut==summary_table_tRNA_T1mild$tRNA[i] & 
+                                                              DE_T1_mild_tRNA$tRNA_class==summary_table_tRNA_T1mild$tRNA_type[i] & 
+                                                              DE_T1_mild_tRNA$lfcShrunk < 0,])
+}
+write.table(summary_table_tRNA_T1mild, "/path/to/tRNA_results/summary_table_tRNA_T1_mild.tsv", sep="\t", row.names=FALSE)
+```
+
+```{r}
+DE_T2_mild_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T2_mild_tRNA$tRNA_class), "3p-tRF", DE_T2_mild_tRNA$tRNA_class)
+
+DE_T2_mild_tRNA$ID_DB_cut <- factor(DE_T2_mild_tRNA$ID_DB_cut, levels= aa_list)
+
+##Alternative plot without misc-tRF and tRF-1
+DE_T2_mild_tRNA <- DE_T2_mild_tRNA %>%
+  filter(!grepl("tRF-1|misc-tRF", DE_T2_mild_tRNA$tRNA_class))
+##
+
+ggplot(DE_T2_mild_tRNA, aes(x=ID_DB_cut, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="darkgreen", alpha=0.7) +
+  geom_jitter(size=2, alpha=0.7, aes(shape= tRNA_class)) +
+  scale_shape_manual(values=c(19,2,1,8)) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black",  hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Moderate (T2) tRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("tRNA isotype")
+
+ggsave("/path/to/tRNA_results/T2_mild_tRNAs_aa_exp_filt.png", height=5, width=15, dpi=600)
+```
+```{r}
+summary_table_tRNA_T2mild <- data.frame(tRNA=rep(unique(DE_T2_mild_tRNA$ID_DB_cut), each=length(unique(DE_T1_acute_tRNA$tRNA_class))), 
+                                         tRNA_type=rep(unique(DE_T1_acute_tRNA$tRNA_class), length(unique(DE_T2_mild_tRNA$ID_DB_cut))), 
+                                                       Up="NA", Down="NA")
+for (i in 1:nrow(summary_table_tRNA_T2mild)){
+  summary_table_tRNA_T2mild$Up[i] <- nrow(DE_T2_mild_tRNA[DE_T2_mild_tRNA$ID_DB_cut==summary_table_tRNA_T2mild$tRNA[i] & 
+                                                              DE_T2_mild_tRNA$tRNA_class==summary_table_tRNA_T2mild$tRNA_type[i] & 
+                                                              DE_T2_mild_tRNA$lfcShrunk > 0,])
+  summary_table_tRNA_T2mild$Down[i] <- nrow(DE_T2_mild_tRNA[DE_T2_mild_tRNA$ID_DB_cut==summary_table_tRNA_T2mild$tRNA[i] & 
+                                                              DE_T2_mild_tRNA$tRNA_class==summary_table_tRNA_T2mild$tRNA_type[i] & 
+                                                              DE_T2_mild_tRNA$lfcShrunk < 0,])
+}
+write.table(summary_table_tRNA_T2mild, "/path/to/tRNA_results/summary_table_tRNA_T2_mild.tsv", sep="\t", row.names=FALSE)
+```
+
+
+### Supplemental table
+
+First we need a summary of the tRNA annotation of our DE sequences.
+```{r}
+DE_T1_acute_sel <- DE_T1_acute_tRNA[, c("seq", "RNA_ID", "tRNA_class", "ID_DB_cut")]
+DE_T2_acute_sel <- DE_T2_acute_tRNA[, c("seq", "RNA_ID", "tRNA_class", "ID_DB_cut")]
+DE_T1_mild_sel <- DE_T1_mild_tRNA[, c("seq", "RNA_ID", "tRNA_class", "ID_DB_cut")]
+DE_T2_mild_sel <- DE_T2_mild_tRNA[, c("seq", "RNA_ID", "tRNA_class", "ID_DB_cut")]
+
+summ_tRNA_anno <- rbind(DE_T1_acute_sel, DE_T2_acute_sel, DE_T1_mild_sel, DE_T2_mild_sel)
+summ_tRNA_anno <- unique(summ_tRNA_anno)
+```
+
+```{r}
+summary_tRNA_table <- data.frame(seq=summ_tRNA_anno$seq, Unitas_ID=summ_tRNA_anno$RNA_ID, Unitas_tRNA_class=summ_tRNA_anno$tRNA_class,
+                                 Isotype=summ_tRNA_anno$ID_DB_cut, Severe_T1_LFC=NA, Severe_T1_padj=NA, Severe_T2_LFC=NA, Severe_T2_padj=NA, 
+                                 Moderate_T1_LFC=NA, Moderate_T1_padj=NA,Moderate_T2_LFC=NA, Moderate_T2_padj=NA)
+
+for (tRNA_seq in summ_tRNA_anno$seq) {
+  summary_tRNA_table$Severe_T1_LFC[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T1_acute_tRNA$seq, DE_T1_acute_tRNA[DE_T1_acute_tRNA$seq == tRNA_seq, "lfcShrunk"], NA)
+  summary_tRNA_table$Severe_T1_padj[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T1_acute_tRNA$seq, DE_T1_acute_tRNA[DE_T1_acute_tRNA$seq == tRNA_seq, "padj"], NA)
+  summary_tRNA_table$Severe_T2_LFC[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T2_acute_tRNA$seq, DE_T2_acute_tRNA[DE_T2_acute_tRNA$seq == tRNA_seq, "lfcShrunk"], NA)
+  summary_tRNA_table$Severe_T2_padj[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T2_acute_tRNA$seq, DE_T1_acute_tRNA[DE_T2_acute_tRNA$seq == tRNA_seq, "padj"], NA)
+  summary_tRNA_table$Moderate_T1_LFC[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T1_mild_tRNA$seq, DE_T1_mild_tRNA[DE_T1_mild_tRNA$seq == tRNA_seq, "lfcShrunk"], NA)
+  summary_tRNA_table$Moderate_T1_padj[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T1_mild_tRNA$seq, DE_T1_mild_tRNA[DE_T1_mild_tRNA$seq == tRNA_seq, "padj"], NA)
+  summary_tRNA_table$Moderate_T2_LFC[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T2_mild_tRNA$seq, DE_T2_mild_tRNA[DE_T2_mild_tRNA$seq == tRNA_seq, "lfcShrunk"], NA)
+  summary_tRNA_table$Moderate_T2_padj[summary_tRNA_table$seq == tRNA_seq] <- ifelse(tRNA_seq %in% DE_T2_mild_tRNA$seq, DE_T1_mild_tRNA[DE_T2_mild_tRNA$seq == tRNA_seq, "padj"], NA)
+}
+
+summary_tRNA_table <- summary_tRNA_table[order(summary_tRNA_table$Isotype),]
+write.table(summary_tRNA_table, "/path/to/tRNA_results/Supp_tRNA.tsv", sep="\t", row.names=FALSE)
+```
+
+### Accumulation plots of Figure 4
+
+Let's study in more detail what are the accumulation profiles of the different tsRNAs from tRNA Glu and tRNA Gly (the DE sequences which accumulate greater).
+
+```{r}
+#Create ID_DB_cut and unique category for 3p-tRF
+DE_T1_acute_tRNA$ID_DB_cut <- str_replace(DE_T1_acute_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T1_acute_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T1_acute_tRNA$tRNA_class), "3p-tRF", DE_T1_acute_tRNA$tRNA_class)
+DE_T2_acute_tRNA$ID_DB_cut <- str_replace(DE_T2_acute_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T2_acute_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T2_acute_tRNA$tRNA_class), "3p-tRF", DE_T2_acute_tRNA$tRNA_class)
+DE_T1_mild_tRNA$ID_DB_cut <- str_replace(DE_T1_mild_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T1_mild_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T1_mild_tRNA$tRNA_class), "3p-tRF", DE_T1_mild_tRNA$tRNA_class)
+DE_T2_mild_tRNA$ID_DB_cut <- str_replace(DE_T2_mild_tRNA$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+DE_T2_mild_tRNA$tRNA_class <- ifelse(grepl("CCA", DE_T2_mild_tRNA$tRNA_class), "3p-tRF", DE_T2_mild_tRNA$tRNA_class)
+```
+
+
+### Glu and Gly
+
+#### 5p-tR-half
+This chunk, that will be repeated for every tsRNA type, creates a table with the sum of the accumulation of each of the forms of Glu and Gly 5p-tR-half. 
+```{r}
+sample_RPM_GluGly_5p_tRhalf <- data.frame(Sample=sampletable$SampleName[-c(1:8)], Group=sampletable$Group[-c(1:8)], Glu_control=NA, 
+                                          Glu_infected=NA, Gly_control=NA, Gly_infected=NA)
+
+for (case in c("T1_acute", "T1_mild", "T2_acute", "T2_mild")){
+  for (aa in c("Glu", "Gly")){
+    df <- get(paste0("DE_", case, "_tRNA"))
+    df_subset <- df[df$ID_DB_cut == paste0("tRNA-",aa) & df$tRNA_class == "5p-tR-half",]
+    seqs <- df_subset$seq
+    col_control <- colnames(RPMs_table)[which(grepl("control", colnames(RPMs_table)))]
+    col_case <- colnames(RPMs_table)[which(grepl(case, colnames(RPMs_table)))]
+    df_RPM <- RPMs_table[RPMs_table$seq %in% seqs, c("seq",col_control,col_case)]
+    df_RPM <- df_RPM %>% #Sum every seq
+      bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+    sample_RPM_GluGly_5p_tRhalf[sample_RPM_GluGly_5p_tRhalf$Group == case, paste0(aa, "_control")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl("control", colnames(df_RPM))])
+    sample_RPM_GluGly_5p_tRhalf[sample_RPM_GluGly_5p_tRhalf$Group == case, paste0(aa, "_infected")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl(case, colnames(df_RPM))])
+  }
+}
+
+sample_RPM_GluGly_5p_tRhalf_long <- sample_RPM_GluGly_5p_tRhalf%>%
+  pivot_longer(c(3:6),
+               names_to="Condition",
+               values_to="RPM")
+sample_RPM_GluGly_5p_tRhalf_long$Color <- ifelse(grepl("control", sample_RPM_GluGly_5p_tRhalf_long$Condition), "Control", paste0(sample_RPM_GluGly_5p_tRhalf_long$Group,"_Infected"))
+```
+
+```{r}
+sample_RPM_GluGly_5p_tRhalf_long$Group <- factor(sample_RPM_GluGly_5p_tRhalf_long$Group, levels = c("T1_acute", "T2_acute", "T1_mild", "T2_mild"))
+state.labs <- c("Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)")
+names(state.labs) <- c("T1_acute", "T2_acute", "T1_mild", "T2_mild")
+sample_RPM_GluGly_5p_tRhalf_long$Label <- gsub("T[012]\\_(acute|mild|control)-", "", sample_RPM_GluGly_5p_tRhalf_long$Sample)
+
+ggplot(sample_RPM_GluGly_5p_tRhalf_long, aes(x=Condition, y=RPM, fill=Color, color=Color)) +
+  geom_violin(alpha=0.7) +
+  geom_boxplot(width=0.25, outlier.shape = NA, alpha=0.7, color="black") +
+  geom_jitter(position=position_jitter(0.2),  alpha=0.7) +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "lightgreen", "#ED0000B2", "darkgreen")) +
+  scale_color_manual(values=c("#00468BB2", "#da6a65", "lightgreen","#ED0000B2", "darkgreen")) +
+  #geom_text_repel(max.overlaps = 50) +
+  theme_classic() +
+  facet_wrap(~Group, nrow = 1, strip.position = "bottom", labeller = labeller(Group=state.labs)) +
+  theme(legend.position="none",
+        plot.title = element_text(size = rel(2)),
+        axis.text.x = element_text(angle=45, vjust=1, hjust=1, color="black", size=10),
+        axis.text.y = element_text(color="black", size=10),
+        panel.grid = element_blank(),
+        strip.background = element_rect(fill="#ebeff1"),
+        strip.text = element_text(size=10),
+        panel.border = element_blank(),
+        axis.line.y = element_line(color="black"),
+        axis.line.x = element_blank()) + ggtitle("5p-tR-half") + xlab("")
+ggsave("/path/to/tRNA_results/GluGly_violin_5p_tRhalf_withlabels.png", height = 5, width = 7)
+```
+
+#### 3p-tR-half
+
+```{r}
+sample_RPM_GluGly_3p_tRhalf <- data.frame(Sample=sampletable$SampleName[-c(1:8)], Group=sampletable$Group[-c(1:8)], Glu_control=NA, 
+                                          Glu_infected=NA, Gly_control=NA, Gly_infected=NA)
+
+for (case in c("T1_acute", "T1_mild", "T2_acute", "T2_mild")){
+  for (aa in c("Glu", "Gly")){
+    df <- get(paste0("DE_", case, "_tRNA"))
+    df_subset <- df[df$ID_DB_cut == paste0("tRNA-",aa) & df$tRNA_class == "3p-tR-half",]
+    seqs <- df_subset$seq
+    col_control <- colnames(RPMs_table)[which(grepl("control", colnames(RPMs_table)))]
+    col_case <- colnames(RPMs_table)[which(grepl(case, colnames(RPMs_table)))]
+    df_RPM <- RPMs_table[RPMs_table$seq %in% seqs, c("seq",col_control,col_case)]
+    df_RPM <- df_RPM %>% #Sum every seq
+      bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+    sample_RPM_GluGly_3p_tRhalf[sample_RPM_GluGly_3p_tRhalf$Group == case, paste0(aa, "_control")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl("control", colnames(df_RPM))])
+    sample_RPM_GluGly_3p_tRhalf[sample_RPM_GluGly_3p_tRhalf$Group == case, paste0(aa, "_infected")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl(case, colnames(df_RPM))])
+  }
+}
+
+sample_RPM_GluGly_3p_tRhalf_long <- sample_RPM_GluGly_3p_tRhalf%>%
+  pivot_longer(c(3:6),
+               names_to="Condition",
+               values_to="RPM")
+sample_RPM_GluGly_3p_tRhalf_long$Color <- ifelse(grepl("control", sample_RPM_GluGly_3p_tRhalf_long$Condition), "Control", paste0(sample_RPM_GluGly_3p_tRhalf_long$Group,"_Infected"))
+```
+
+
+```{r}
+sample_RPM_GluGly_3p_tRhalf_long$Group <- factor(sample_RPM_GluGly_3p_tRhalf_long$Group, levels = c("T1_acute", "T2_acute", "T1_mild", "T2_mild"))
+state.labs <- c("Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)")
+names(state.labs) <- c("T1_acute", "T2_acute", "T1_mild", "T2_mild")
+sample_RPM_GluGly_3p_tRhalf_long$Label <- gsub("T[012]\\_(acute|mild|control)-", "", sample_RPM_GluGly_3p_tRhalf_long$Sample)
+
+ggplot(sample_RPM_GluGly_3p_tRhalf_long, aes(x=Condition, y=RPM, fill=Color, color=Color)) +
+  geom_violin(alpha=0.7) +
+  geom_boxplot(width=0.25, outlier.shape = NA, alpha=0.7, color="black") +
+  geom_jitter(position=position_jitter(0.2), alpha=0.7) +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "lightgreen", "#ED0000B2", "darkgreen")) +
+  scale_color_manual(values=c("#00468BB2", "#da6a65", "lightgreen","#ED0000B2", "darkgreen")) +
+  #geom_text_repel() +
+  theme_classic() +
+  facet_wrap(~Group, nrow = 1, strip.position = "bottom", labeller = labeller(Group=state.labs)) +
+  theme(legend.position="none",
+        plot.title = element_text(size = rel(2)),
+        axis.text.x = element_text(angle=45, vjust=1, hjust=1, color="black", size=10),
+        axis.text.y = element_text(color="black", size=10),
+        panel.grid = element_blank(),
+        strip.background = element_rect(fill="#ebeff1"),
+        strip.text = element_text(size=10),
+        panel.border = element_blank(),
+        axis.line.y = element_line(color="black"),
+        axis.line.x = element_blank()) + ggtitle("3p-tR-half") + xlab("") + ylim(c(-1,100))
+ggsave("/path/to/tRNA_results/GluGly_violin_3p_tRhalf_withlabels.png", height = 5, width = 7)
+```
+
+#### 5p-tRF
+
+```{r}
+sample_RPM_GluGly_5p_tRF <- data.frame(Sample=sampletable$SampleName[-c(1:8)], Group=sampletable$Group[-c(1:8)], Glu_control=NA, 
+                                          Glu_infected=NA, Gly_control=NA, Gly_infected=NA)
+
+for (case in c("T1_acute", "T1_mild", "T2_acute", "T2_mild")){
+  for (aa in c("Glu", "Gly")){
+    df <- get(paste0("DE_", case, "_tRNA"))
+    df_subset <- df[df$ID_DB_cut == paste0("tRNA-",aa) & df$tRNA_class == "5p-tRF",]
+    seqs <- df_subset$seq
+    col_control <- colnames(RPMs_table)[which(grepl("control", colnames(RPMs_table)))]
+    col_case <- colnames(RPMs_table)[which(grepl(case, colnames(RPMs_table)))]
+    df_RPM <- RPMs_table[RPMs_table$seq %in% seqs, c("seq",col_control,col_case)]
+    df_RPM <- df_RPM %>% #Sum every seq
+      bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+    sample_RPM_GluGly_5p_tRF[sample_RPM_GluGly_5p_tRF$Group == case, paste0(aa, "_control")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl("control", colnames(df_RPM))])
+    sample_RPM_GluGly_5p_tRF[sample_RPM_GluGly_5p_tRF$Group == case, paste0(aa, "_infected")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl(case, colnames(df_RPM))])
+  }
+}
+
+sample_RPM_GluGly_5p_tRF_long <- sample_RPM_GluGly_5p_tRF%>%
+  pivot_longer(c(3:6),
+               names_to="Condition",
+               values_to="RPM")
+sample_RPM_GluGly_5p_tRF_long$Color <- ifelse(grepl("control", sample_RPM_GluGly_5p_tRF_long$Condition), "Control", paste0(sample_RPM_GluGly_5p_tRF_long$Group,"_Infected"))
+```
+
+```{r}
+sample_RPM_GluGly_5p_tRF_long$Group <- factor(sample_RPM_GluGly_5p_tRF_long$Group, levels = c("T1_acute", "T2_acute", "T1_mild", "T2_mild"))
+state.labs <- c("Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)")
+names(state.labs) <- c("T1_acute", "T2_acute", "T1_mild", "T2_mild")
+sample_RPM_GluGly_5p_tRF_long$Label <- gsub("T[012]\\_(acute|mild|control)-", "", sample_RPM_GluGly_5p_tRF_long$Sample)
+
+ggplot(sample_RPM_GluGly_5p_tRF_long, aes(x=Condition, y=RPM, fill=Color, color=Color)) +
+  geom_violin(alpha=0.7) +
+  geom_boxplot(width=0.25, outlier.shape = NA, alpha=0.7, color="black") +
+  geom_jitter(position=position_jitter(0.2), alpha=0.7) +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "lightgreen", "#ED0000B2", "darkgreen")) +
+  scale_color_manual(values=c("#00468BB2", "#da6a65", "lightgreen","#ED0000B2", "darkgreen")) +
+  #geom_text_repel() +
+  theme_classic() +
+  facet_wrap(~Group, nrow = 1, strip.position = "bottom", labeller = labeller(Group=state.labs)) +
+  theme(legend.position="none",
+        plot.title = element_text(size = rel(2)),
+        axis.text.x = element_text(angle=45, vjust=1, hjust=1, color="black", size=10),
+        axis.text.y = element_text(color="black", size=10),
+        panel.grid = element_blank(),
+        strip.background = element_rect(fill="#ebeff1"),
+        strip.text = element_text(size=10),
+        panel.border = element_blank(),
+        axis.line.y = element_line(color="black"),
+        axis.line.x = element_blank()) + ggtitle("5p-tRF") + xlab("") + ylim(c(-1,6000))
+ggsave("/path/to/tRNA_results/GluGly_violin_5p_tRF_withlabel.png", height = 5, width = 7)
+```
+
+#### 3-tRF
+
+```{r}
+sample_RPM_GluGly_3p_tRF <- data.frame(Sample=sampletable$SampleName[-c(1:8)], Group=sampletable$Group[-c(1:8)], Glu_control=NA, 
+                                          Glu_infected=NA, Gly_control=NA, Gly_infected=NA)
+
+for (case in c("T1_acute", "T1_mild", "T2_acute", "T2_mild")){
+  for (aa in c("Glu", "Gly")){
+    df <- get(paste0("DE_", case, "_tRNA"))
+    df_subset <- df[df$ID_DB_cut == paste0("tRNA-",aa) & df$tRNA_class == "3p-tRF",]
+    seqs <- df_subset$seq
+    col_control <- colnames(RPMs_table)[which(grepl("control", colnames(RPMs_table)))]
+    col_case <- colnames(RPMs_table)[which(grepl(case, colnames(RPMs_table)))]
+    df_RPM <- RPMs_table[RPMs_table$seq %in% seqs, c("seq",col_control,col_case)]
+    df_RPM <- df_RPM %>% #Sum every seq
+      bind_rows(summarise(.,
+                      across(where(is.numeric), sum),
+                      across(where(is.character), ~"Total")))
+    sample_RPM_GluGly_3p_tRF[sample_RPM_GluGly_3p_tRF$Group == case, paste0(aa, "_control")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl("control", colnames(df_RPM))])
+    sample_RPM_GluGly_3p_tRF[sample_RPM_GluGly_3p_tRF$Group == case, paste0(aa, "_infected")] <- as.numeric(df_RPM[df_RPM$seq == "Total", grepl(case, colnames(df_RPM))])
+  }
+}
+
+sample_RPM_GluGly_3p_tRF_long <- sample_RPM_GluGly_3p_tRF%>%
+  pivot_longer(c(3:6),
+               names_to="Condition",
+               values_to="RPM")
+sample_RPM_GluGly_3p_tRF_long$Color <- ifelse(grepl("control", sample_RPM_GluGly_3p_tRF_long$Condition), "Control", paste0(sample_RPM_GluGly_3p_tRF_long$Group,"_Infected"))
+```
+
+```{r}
+sample_RPM_GluGly_3p_tRF_long$Group <- factor(sample_RPM_GluGly_3p_tRF_long$Group, levels = c("T1_acute", "T2_acute", "T1_mild", "T2_mild"))
+state.labs <- c("Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)")
+names(state.labs) <- c("T1_acute", "T2_acute", "T1_mild", "T2_mild")
+sample_RPM_GluGly_3p_tRF_long$Label <- gsub("T[012]\\_(acute|mild|control)-", "", sample_RPM_GluGly_3p_tRF_long$Sample)
+
+ggplot(sample_RPM_GluGly_3p_tRF_long, aes(x=Condition, y=RPM, fill=Color, color=Color)) +
+  geom_violin(alpha=0.7) +
+  geom_boxplot(width=0.25, outlier.shape = NA, alpha=0.7, color="black") +
+  geom_jitter(position=position_jitter(0.2), alpha=0.7) +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "lightgreen", "#ED0000B2", "darkgreen")) +
+  scale_color_manual(values=c("#00468BB2", "#da6a65", "lightgreen","#ED0000B2", "darkgreen")) +
+  #geom_text_repel() +
+  theme_classic() +
+  facet_wrap(~Group, nrow = 1, strip.position = "bottom", labeller = labeller(Group=state.labs)) +
+  theme(legend.position="none",
+        plot.title = element_text(size = rel(2)),
+        axis.text.x = element_text(angle=45, vjust=1, hjust=1, color="black", size=10),
+        axis.text.y = element_text(color="black", size=10),
+        panel.grid = element_blank(),
+        strip.background = element_rect(fill="#ebeff1"),
+        strip.text = element_text(size=10),
+        panel.border = element_blank(),
+        axis.line.y = element_line(color="black"),
+        axis.line.x = element_blank()) + ggtitle("3p-tRF") + xlab("") + ylim(c(-1,100))
+ggsave("/path/to/tRNA_results/GluGly_violin_3p_tRF_withlabels.png", height = 5, width = 7)
+```
+
+
+***
+
+### Supp. figure
+
+We need an initial figure showing that the preponderant tRNA species (in terms of accumulation) are tRNA-Glu and tRNA-Gly.
+
+####Severe
+```{r}
+df_tRNA_acute <- data.frame(Sample=rep(colnames(RPMs_table)[c(2:17, 26:33)], length(aa_list)), 
+                            tRNA_isotype=rep(aa_list, each=length(colnames(RPMs_table)[c(2:17, 26:33)])),
+                            Group=rep(rep(c("Control", "T1", "T2"), each=8), 20), RPM=NA)
+```
+
+```{r}
+DE_tRNAs_acute <- Reduce (union, list(DE_T1_acute_tRNA$seq, DE_T2_acute_tRNA$seq))
+
+RPMs_table_acuteDE <- RPMs_table %>%
+  dplyr::filter(seq %in% DE_tRNAs_acute)
+
+RPMs_table_acuteDE_ann <- merge(RPMs_table_acuteDE, anno_file, by.x="seq", by.y="Seq", all.x=TRUE)
+RPMs_table_acuteDE_ann$ID_DB_cut <- str_replace(RPMs_table_acuteDE_ann$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+RPMs_table_acuteDE_ann$ID_DB_cut <- str_replace(RPMs_table_acuteDE_ann$ID_DB_cut, "tRNA-", "")
+
+#Filter the samples
+RPMs_table_acuteDE_ann <- RPMs_table_acuteDE_ann[,c(which(grepl("control|acute",colnames(RPMs_table_acuteDE_ann))), c(42:48))]
+
+for (aa in aa_list){
+  df_tRNA_acute[df_tRNA_acute$tRNA_isotype == aa, "RPM"] <- t(RPMs_table_acuteDE_ann[RPMs_table_acuteDE_ann$ID_DB_cut == aa, c(1:24)] %>% summarise_all(sum))
+}
+
+#df_tRNA_acute$tRNA_isotype <- str_replace(df_tRNA_acute$tRNA_isotype, "tRNA-", "")
+```
+
+```{r}
+ggplot(df_tRNA_acute, aes(x=Group, y=RPM, fill=Group, color=Group)) +
+  geom_boxplot(width=0.25, outlier.shape = NA, alpha=0.7, color="black") +
+  geom_jitter(position=position_jitter(0.2), alpha=0.7) +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "#ED0000B2")) +
+  scale_color_manual(values=c("#00468BB2", "#da6a65", "#ED0000B2")) +
+  facet_wrap(~ tRNA_isotype, nrow = 1, strip.position = "bottom") +
+  theme_classic() +
+  theme(legend.position="none",
+        plot.title = element_text(size = rel(2)),
+        axis.text.x = element_text(angle=45, vjust=1, hjust=1, color="black", size=10),
+        axis.text.y = element_text(color="black", size=10),
+        panel.grid = element_blank(),
+        strip.background = element_rect(fill="#ebeff1"),
+        strip.text = element_text(size=10),
+        panel.border = element_blank(),
+        axis.line.y = element_line(color="black"),
+        axis.line.x = element_blank())
+
+ggsave("/path/to/tRNA_results/tRNA_isotype_accumulation_severe.png", height=7, width=15)
+```
+
+The exact number of the medians facilitated in the paper:
+
+```{r}
+median(df_tRNA_acute[df_tRNA_acute$tRNA_isotype == "Glu" & df_tRNA_acute$Group == "T1", "RPM"])
+median(df_tRNA_acute[df_tRNA_acute$tRNA_isotype == "Glu" & df_tRNA_acute$Group == "T2", "RPM"])
+median(df_tRNA_acute[df_tRNA_acute$tRNA_isotype == "Gly" & df_tRNA_acute$Group == "T1", "RPM"])
+median(df_tRNA_acute[df_tRNA_acute$tRNA_isotype == "Gly" & df_tRNA_acute$Group == "T2", "RPM"])
+```
+
+#### Moderate
+```{r}
+df_tRNA_mild <- data.frame(Sample=rep(colnames(RPMs_table)[c(2:9, 18:25, 34:41)], length(aa_list)), 
+                            tRNA_isotype=rep(aa_list, each=length(colnames(RPMs_table)[c(2:9, 18:25, 34:41)])),
+                            Group=rep(rep(c("Control", "T1", "T2"), each=8), 20), RPM=NA)
+```
+
+```{r}
+DE_tRNAs_mild <- Reduce (union, list(DE_T1_mild_tRNA$seq, DE_T2_mild_tRNA$seq))
+
+RPMs_table_mildDE <- RPMs_table %>%
+  dplyr::filter(seq %in% DE_tRNAs_mild)
+
+RPMs_table_mildDE_ann <- merge(RPMs_table_mildDE, anno_file, by.x="seq", by.y="Seq", all.x=TRUE)
+RPMs_table_mildDE_ann$ID_DB_cut <- str_replace(RPMs_table_mildDE_ann$RNA_ID, "-[A-Z]{3}-[0-9][0-9]?-[0-9][0-9]?", "")
+RPMs_table_mildDE_ann$ID_DB_cut <- str_replace(RPMs_table_mildDE_ann$ID_DB_cut, "tRNA-", "")
+
+#Filter the samples
+RPMs_table_mildDE_ann <- RPMs_table_mildDE_ann[,c(which(grepl("control|mild",colnames(RPMs_table_mildDE_ann))), c(42:48))]
+
+for (aa in aa_list){
+  df_tRNA_mild[df_tRNA_mild$tRNA_isotype == aa, "RPM"] <- t(RPMs_table_mildDE_ann[RPMs_table_mildDE_ann$ID_DB_cut == aa, c(1:24)] %>% summarise_all(sum))
+}
+
+```
+
+```{r}
+ggplot(df_tRNA_mild, aes(x=Group, y=RPM, fill=Group, color=Group)) +
+  geom_boxplot(width=0.25, outlier.shape = NA, alpha=0.7, color="black") +
+  geom_jitter(position=position_jitter(0.2), alpha=0.7) +
+  scale_fill_manual(values=c("#00468BB2", "lightgreen", "darkgreen")) +
+  scale_color_manual(values=c("#00468BB2", "lightgreen", "darkgreen")) +
+  scale_y_break(c(125000,210000)) +
+  facet_wrap(~ tRNA_isotype, nrow = 1, strip.position = "bottom") +
+  theme_classic() +
+  theme(legend.position="none",
+        plot.title = element_text(size = rel(2)),
+        axis.text.x = element_text(angle=45, vjust=1, hjust=1, color="black", size=10),
+        axis.text.y = element_text(color="black", size=10),
+        panel.grid = element_blank(),
+        strip.background = element_rect(fill="#ebeff1"),
+        strip.text = element_text(size=10),
+        panel.border = element_blank(),
+        axis.line.y = element_line(color="black"),
+        axis.line.x = element_blank())
+
+ggsave("/path/to/tRNA_results/tRNA_isotype_accumulation_moderate.png", height=7, width=15)
+```
+
+The exact number of the medians facilitated in the paper:
+
+```{r}
+median(df_tRNA_mild[df_tRNA_mild$tRNA_isotype == "Glu" & df_tRNA_mild$Group == "T1", "RPM"])
+median(df_tRNA_mild[df_tRNA_mild$tRNA_isotype == "Glu" & df_tRNA_mild$Group == "T2", "RPM"])
+median(df_tRNA_mild[df_tRNA_mild$tRNA_isotype == "Gly" & df_tRNA_mild$Group == "T1", "RPM"])
+median(df_tRNA_mild[df_tRNA_mild$tRNA_isotype == "Gly" & df_tRNA_mild$Group == "T2", "RPM"])
+```

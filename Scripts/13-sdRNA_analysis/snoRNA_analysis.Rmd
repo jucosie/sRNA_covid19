@@ -1,0 +1,295 @@
+---
+title: "snoRNA analysis"
+author: "Julia Corell Sierra"
+date: "2023-02-28"
+output: html_document
+---
+
+In this script you'll find all the code necessary to produce the figures and tables related to the snoRNA analysis. 
+```{r}
+library(tidyverse)
+```
+
+```{r}
+padj.cutoff <- 0.05
+anno_file <- read.table("/path/to/annotation_results/unitas_simplified_annnotation/unitas_complete_anno.txt", sep="\t", header=TRUE)
+DE_T1_acute <- read.table("/path/to/DEA_results/results_DE_T1acute.tsv", sep="\t", header=TRUE)
+DE_T1_acute_sig <- DE_T1_acute %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T1_mild <- read.table("/path/to/DEA_results/results_DE_T1mild.tsv", sep="\t", header=TRUE)
+DE_T1_mild_sig <- DE_T1_mild %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T2_acute <- read.table("/path/to/DEA_results/results_DE_T2acute.tsv", sep="\t", header=TRUE)
+DE_T2_acute_sig <- DE_T2_acute %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T2_mild <- read.table("/path/to/DEA_results/results_DE_T2mild.tsv", sep="\t", header=TRUE)
+DE_T2_mild_sig <- DE_T2_mild %>%
+  dplyr::filter(padj < padj.cutoff)
+
+DE_T1_acute_sig_ann <- merge(DE_T1_acute_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+DE_T1_mild_sig_ann <-  merge(DE_T1_mild_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+DE_T2_acute_sig_ann <- merge(DE_T2_acute_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+DE_T2_mild_sig_ann <-  merge(DE_T2_mild_sig, anno_file, by.x = "seq", by.y = "Seq", all.x = TRUE)
+```
+
+```{r}
+DE_T1_acute_snoRNA <- DE_T1_acute_sig_ann %>%
+  dplyr::filter(grepl("snoRNA", DE_T1_acute_sig_ann$RNA_class))
+
+DE_T1_mild_snoRNA <- DE_T1_mild_sig_ann %>%
+  dplyr::filter(grepl("snoRNA", DE_T1_mild_sig_ann$RNA_class))
+
+DE_T2_acute_snoRNA <- DE_T2_acute_sig_ann %>%
+  dplyr::filter(grepl("snoRNA", DE_T2_acute_sig_ann$RNA_class))
+
+DE_T2_mild_snoRNA <- DE_T2_mild_sig_ann %>%
+  dplyr::filter(grepl("snoRNA", DE_T2_mild_sig_ann$RNA_class))
+
+DE_snoRNAs <- Reduce (union, list(DE_T1_acute_snoRNA$seq, DE_T1_mild_snoRNA$seq, DE_T2_acute_snoRNA$seq, DE_T2_mild_snoRNA$seq))
+```
+
+
+### Length profile of every snoRNA DE
+
+```{r}
+DE_snoRNAs_df <- data.frame(snoRNA = DE_snoRNAs)
+DE_snoRNAs_df_ann <- merge(DE_snoRNAs_df, anno_file, by.x="snoRNA", by.y="Seq", all.x=TRUE)
+DE_snoRNAs_df_ann_sum <- DE_snoRNAs_df_ann %>%
+  dplyr::count(Length)
+
+ggplot(DE_snoRNAs_df_ann_sum, aes(x=Length, y=n)) +
+  geom_bar(stat="identity") +
+  scale_x_continuous(breaks = seq(12,34)) +
+  theme_bw()
+```
+
+#### Distinguishing by sdRNA type
+```{r}
+DE_snoRNAs_df_ann$snoRNA_fam <- ifelse(grepl("SNORD", DE_snoRNAs_df_ann$RNA_ID), "C/D box", NA)
+DE_snoRNAs_df_ann$snoRNA_fam <- ifelse(grepl("SNORA", DE_snoRNAs_df_ann$RNA_ID), "H/ACA box", DE_snoRNAs_df_ann$snoRNA_fam)
+#We manually checked all those with strange labels and saw that all of them are D type
+DE_snoRNAs_df_ann$snoRNA_fam <- ifelse(is.na(DE_snoRNAs_df_ann$snoRNA_fam), "C/D box", DE_snoRNAs_df_ann$snoRNA_fam)
+
+DE_snoRNAs_df_ann_sum_2 <- DE_snoRNAs_df_ann %>%
+  count(Length, snoRNA_fam)
+DE_snoRNAs_df_ann_sum_2$snoRNA_fam <- factor(DE_snoRNAs_df_ann_sum_2$snoRNA_fam, levels=c("H/ACA box", "C/D box"))
+```
+
+```{r}
+ggplot(DE_snoRNAs_df_ann_sum_2, aes(x=Length, y=n, fill=snoRNA_fam)) +
+  geom_bar(position="dodge", stat="identity") +
+  scale_x_continuous(breaks = seq(12,34)) +
+  scale_fill_manual(values=c("#FF8985","#9999C3"), name="snoRNA subgroup") +
+  theme_bw() +
+  facet_wrap(~ snoRNA_fam) + ylab("Number of sdRNA sequences differentialy expressed")
+
+ggsave("/path/to/snoRNA_results/sdRNA_subtype_length_dist.png", height=7, width=12, dpi=600)
+```
+
+***
+
+Let's take a look at the snoRNA sequences behavior.
+
+```{r}
+##Remove the extra Ensemble annotation
+DE_T1_acute_snoRNA$RNA_ID_toplot <- ifelse(grepl(">",DE_T1_acute_snoRNA$RNA_ID),DE_T1_acute_snoRNA$RNA_ID, gsub("-ENS.+", "", DE_T1_acute_snoRNA$RNA_ID))
+##Annotate manually those snoRNAs identified with Ensembl IDs
+DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == ">ENST00000362899.2-ENSG00000277492.1", "RNA_ID_toplot"] <- "ENSG00000277492"
+DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == ">ENST00000363552.1-ENSG00000200422.1", "RNA_ID_toplot"] <- "SNORD45"
+DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == ">ENST00000364139.1-ENSG00000201009.1", "RNA_ID_toplot"] <- "SNORD46"
+DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == ">ENST00000391230.1-ENSG00000212532.1", "RNA_ID_toplot"] <- "SNORD66"
+DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == ">ENST00000629629.1-ENSG00000280554.1", "RNA_ID_toplot"] <- "ENSG00000280554"
+DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == "U3", "RNA_ID_toplot"] <- "small_nucleolar_RNA_U3"
+
+##T1 mild
+DE_T1_mild_snoRNA$RNA_ID_toplot <- ifelse(grepl(">",DE_T1_mild_snoRNA$RNA_ID),DE_T1_mild_snoRNA$RNA_ID, gsub("-ENS.+", "", DE_T1_mild_snoRNA$RNA_ID))
+DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == ">ENST00000362899.2-ENSG00000277492.1", "RNA_ID_toplot"] <- "ENSG00000277492"
+DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == ">ENST00000363552.1-ENSG00000200422.1", "RNA_ID_toplot"] <- "SNORD45"
+DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == ">ENST00000364139.1-ENSG00000201009.1", "RNA_ID_toplot"] <- "SNORD46"
+DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == ">ENST00000391230.1-ENSG00000212532.1", "RNA_ID_toplot"] <- "SNORD66"
+DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == ">ENST00000629629.1-ENSG00000280554.1", "RNA_ID_toplot"] <- "ENSG00000280554"
+DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == "U3", "RNA_ID_toplot"] <- "small_nucleolar_RNA_U3"
+
+#T2 acute
+DE_T2_acute_snoRNA$RNA_ID_toplot <- ifelse(grepl(">",DE_T2_acute_snoRNA$RNA_ID),DE_T2_acute_snoRNA$RNA_ID, gsub("-ENS.+", "", DE_T2_acute_snoRNA$RNA_ID))
+DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == ">ENST00000362899.2-ENSG00000277492.1", "RNA_ID_toplot"] <- "ENSG00000277492"
+DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == ">ENST00000363552.1-ENSG00000200422.1", "RNA_ID_toplot"] <- "SNORD45"
+DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == ">ENST00000364139.1-ENSG00000201009.1", "RNA_ID_toplot"] <- "SNORD46"
+DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == ">ENST00000391230.1-ENSG00000212532.1", "RNA_ID_toplot"] <- "SNORD66"
+DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == ">ENST00000629629.1-ENSG00000280554.1", "RNA_ID_toplot"] <- "ENSG00000280554"
+DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == "U3", "RNA_ID_toplot"] <- "small_nucleolar_RNA_U3"
+
+#T2 mild
+DE_T2_mild_snoRNA$RNA_ID_toplot <- ifelse(grepl(">",DE_T2_mild_snoRNA$RNA_ID),DE_T2_mild_snoRNA$RNA_ID, gsub("-ENS.+", "", DE_T2_mild_snoRNA$RNA_ID))
+DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == ">ENST00000362899.2-ENSG00000277492.1", "RNA_ID_toplot"] <- "ENSG00000277492"
+DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == ">ENST00000363552.1-ENSG00000200422.1", "RNA_ID_toplot"] <- "SNORD45"
+DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == ">ENST00000364139.1-ENSG00000201009.1", "RNA_ID_toplot"] <- "SNORD46"
+DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == ">ENST00000391230.1-ENSG00000212532.1", "RNA_ID_toplot"] <- "SNORD66"
+DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == ">ENST00000629629.1-ENSG00000280554.1", "RNA_ID_toplot"] <- "ENSG00000280554"
+DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == "U3", "RNA_ID_toplot"] <- "small_nucleolar_RNA_U3"
+
+DE_snoRNAs_ID <- unique(DE_snoRNAs_df_ann$RNA_ID)
+DE_snoRNAs_ID <- ifelse(grepl(">",DE_snoRNAs_ID),DE_snoRNAs_ID, gsub("-ENS.+", "", DE_snoRNAs_ID))
+DE_snoRNAs_ID[DE_snoRNAs_ID == ">ENST00000362899.2-ENSG00000277492.1"] <- "ENSG00000277492"
+DE_snoRNAs_ID[DE_snoRNAs_ID == ">ENST00000363552.1-ENSG00000200422.1"] <- "SNORD45"
+DE_snoRNAs_ID[DE_snoRNAs_ID == ">ENST00000364139.1-ENSG00000201009.1"] <- "SNORD46"
+DE_snoRNAs_ID[DE_snoRNAs_ID == ">ENST00000391230.1-ENSG00000212532.1"] <- "SNORD66"
+DE_snoRNAs_ID[DE_snoRNAs_ID == ">ENST00000629629.1-ENSG00000280554.1"] <- "ENSG00000280554"
+DE_snoRNAs_ID[DE_snoRNAs_ID == "U3"] <- "small_nucleolar_RNA_U3"
+DE_snoRNAs_ID <- sort(unique(DE_snoRNAs_ID))
+
+DE_T1_acute_snoRNA$RNA_ID_toplot <- factor(DE_T1_acute_snoRNA$RNA_ID_toplot, levels=DE_snoRNAs_ID)
+DE_T1_mild_snoRNA$RNA_ID_toplot <- factor(DE_T1_mild_snoRNA$RNA_ID_toplot, levels=DE_snoRNAs_ID)
+DE_T2_acute_snoRNA$RNA_ID_toplot <- factor(DE_T2_acute_snoRNA$RNA_ID_toplot, levels=DE_snoRNAs_ID)
+DE_T2_mild_snoRNA$RNA_ID_toplot <- factor(DE_T2_mild_snoRNA$RNA_ID_toplot, levels=DE_snoRNAs_ID)
+```
+
+##### T1 acute
+```{r}
+ggplot(DE_T1_acute_snoRNA, aes(x=RNA_ID_toplot, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="#da6a65", alpha=0.7) +
+  geom_jitter(alpha=0.7) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", angle=90, hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Severe (T1) snoRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("snoRNA gene")
+ggsave("/path/to/snoRNA_results/T1_acute_snoRNA.png", height=5, width=17, dpi=600)
+```
+##### T2 acute
+```{r}
+ggplot(DE_T2_acute_snoRNA, aes(x=RNA_ID_toplot, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="#ED0000B2", alpha=0.7) +
+  geom_jitter(alpha=0.7) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", angle=90, hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Severe (T2) snoRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("snoRNA gene")
+ggsave("/path/to/snoRNA_results/T2_acute_snoRNA.png", height=5, width=17, dpi=600)
+```
+```{r}
+ggplot(DE_T1_mild_snoRNA, aes(x=RNA_ID_toplot, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="lightgreen", alpha=0.7) +
+  geom_jitter(alpha=0.7) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", angle=90, hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Moderate (T1) snoRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("snoRNA gene")
+ggsave("/path/to/snoRNA_results/T1_mild_snoRNA.png", height=5, width=17, dpi=600)
+```
+```{r}
+ggplot(DE_T2_mild_snoRNA, aes(x=RNA_ID_toplot, y=lfcShrunk)) +
+  geom_boxplot(outlier.shape=NA, fill="darkgreen", alpha=0.7) +
+  geom_jitter(alpha=0.7) +
+  scale_x_discrete(drop=FALSE) +
+  theme_bw() +
+  geom_hline(yintercept=0, color="black") +
+  theme(#legend.position = "none",
+    panel.grid.minor.y = element_blank(),
+    axis.text.x = element_text(color="black", angle=90, hjust = 1, vjust = 0.5),
+    axis.text.y = element_text(color="black")) + ggtitle("Moderate (T2) snoRNA-derived expression") + ylab("Log2 fold change") +
+  xlab("snoRNA gene")
+ggsave("/path/to/snoRNA_results/T2_mild_snoRNA.png", height=5, width=17, dpi=600)
+```
+
+
+#### Tables
+First let's get a binary table of presence/absence of miRNA family per contrast.
+
+```{r}
+snoRNA_binary <- data.frame(RNA_ID_toplot=DE_snoRNAs_ID, T1_acute=NA, T2_acute=NA, T1_mild=NA, T2_mild=NA)
+snoRNA_binary$T1_acute <- ifelse(snoRNA_binary$RNA_ID_toplot %in% unique(DE_T1_acute_snoRNA$RNA_ID_toplot), 1, 0)
+snoRNA_binary$T2_acute <- ifelse(snoRNA_binary$RNA_ID_toplot %in% unique(DE_T2_acute_snoRNA$RNA_ID_toplot), 1, 0)
+snoRNA_binary$T1_mild <- ifelse(snoRNA_binary$RNA_ID_toplot %in% unique(DE_T1_mild_snoRNA$RNA_ID_toplot), 1, 0)
+snoRNA_binary$T2_mild <- ifelse(snoRNA_binary$RNA_ID_toplot %in% unique(DE_T2_mild_snoRNA$RNA_ID_toplot), 1, 0)
+
+write.table(snoRNA_binary, "/path/to/snoRNA_results/sdRNA_binary_table.tsv", sep="\t", row.names = FALSE)
+```
+
+Diversity of sequences per RNA_ID_toplot and contrast.
+```{r}
+snoRNA_seq_diversity <- data.frame(RNA_ID_toplot=DE_snoRNAs_ID, T1_acute=NA, T2_acute=NA, T1_mild=NA, T2_mild=NA)
+
+for (fam in DE_snoRNAs_ID){
+  snoRNA_seq_diversity$T1_acute[snoRNA_seq_diversity$RNA_ID_toplot == fam] <- nrow(DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == fam,])
+  snoRNA_seq_diversity$T2_acute[snoRNA_seq_diversity$RNA_ID_toplot == fam] <- nrow(DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == fam,])
+  snoRNA_seq_diversity$T1_mild[snoRNA_seq_diversity$RNA_ID_toplot == fam] <- nrow(DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == fam,])
+  snoRNA_seq_diversity$T2_mild[snoRNA_seq_diversity$RNA_ID_toplot == fam] <- nrow(DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == fam,])
+}
+
+write.table(snoRNA_seq_diversity, "/path/to/snoRNA_results/sdRNA_seqdiversity_table.tsv", sep="\t", row.names = FALSE)
+```
+
+Median LFC per RNA_ID_toplot and contrast.
+```{r}
+snoRNA_medianLFC <- data.frame(RNA_ID_toplot=DE_snoRNAs_ID, T1_acute=NA, T2_acute=NA, T1_mild=NA, T2_mild=NA)
+
+for (fam in DE_snoRNAs_ID){
+  snoRNA_medianLFC$T1_acute[snoRNA_medianLFC$RNA_ID_toplot == fam] <- ifelse(nrow(DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == fam,]) > 1 ,median(DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"]), DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"])
+  snoRNA_medianLFC$T2_acute[snoRNA_medianLFC$RNA_ID_toplot == fam] <- ifelse(nrow(DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == fam,]) > 1 , median(DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"]), DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"])
+  snoRNA_medianLFC$T1_mild[snoRNA_medianLFC$RNA_ID_toplot == fam] <- ifelse(nrow(DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == fam,]) > 1 , median(DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"]), DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"])
+  snoRNA_medianLFC$T2_mild[snoRNA_medianLFC$RNA_ID_toplot == fam] <- ifelse(nrow(DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == fam,]) > 1 , median(DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"]), DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$RNA_ID_toplot == fam, "lfcShrunk"])
+}
+
+write.table(snoRNA_medianLFC, "/path/to/snoRNA_results/sdRNA_medianLFC.tsv", sep="\t", row.names = FALSE)
+```
+
+
+**Questions:**
+
+Down-regulated snoRNAs at Severe T1 and T2:
+```{r}
+table(snoRNA_medianLFC$T1_acute < 0)
+table(snoRNA_medianLFC$T2_acute < 0)
+```
+
+Down-regulated snoRNAs at Moderate T1 and T2:
+```{r}
+table(snoRNA_medianLFC$T1_mild< 0)
+table(snoRNA_medianLFC$T2_mild < 0)
+```
+
+
+### Supplemental table
+
+```{r}
+DE_T1_acute_sel <- DE_T1_acute_snoRNA[, c("seq", "RNA_ID_toplot")]
+DE_T2_acute_sel <- DE_T2_acute_snoRNA[, c("seq", "RNA_ID_toplot")]
+DE_T1_mild_sel <- DE_T1_mild_snoRNA[, c("seq", "RNA_ID_toplot")]
+DE_T2_mild_sel <- DE_T2_mild_snoRNA[, c("seq", "RNA_ID_toplot")]
+
+summ_sdRNA_anno <- rbind(DE_T1_acute_sel, DE_T2_acute_sel, DE_T1_mild_sel, DE_T2_mild_sel)
+summ_sdRNA_anno <- unique(summ_sdRNA_anno)
+```
+
+```{r}
+summary_sdRNA_table <- data.frame(seq=summ_sdRNA_anno$seq, snoRNA_gene=summ_sdRNA_anno$RNA_ID_toplot, Severe_T1_LFC=NA, 
+                                  Severe_T1_padj=NA, Severe_T2_LFC=NA, Severe_T2_padj=NA, Moderate_T1_LFC=NA, 
+                                  Moderate_T1_padj=NA,Moderate_T2_LFC=NA, Moderate_T2_padj=NA)
+
+for (sdRNA_seq in summary_sdRNA_table$seq) {
+  summary_sdRNA_table$Severe_T1_LFC[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T1_acute_snoRNA$seq, DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$seq == sdRNA_seq, "lfcShrunk"], NA)
+  summary_sdRNA_table$Severe_T1_padj[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T1_acute_snoRNA$seq, DE_T1_acute_snoRNA[DE_T1_acute_snoRNA$seq == sdRNA_seq, "padj"], NA)
+  summary_sdRNA_table$Severe_T2_LFC[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T2_acute_snoRNA$seq, DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$seq == sdRNA_seq, "lfcShrunk"], NA)
+  summary_sdRNA_table$Severe_T2_padj[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T2_acute_snoRNA$seq, DE_T2_acute_snoRNA[DE_T2_acute_snoRNA$seq == sdRNA_seq, "padj"], NA)
+  summary_sdRNA_table$Moderate_T1_LFC[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T1_mild_snoRNA$seq, DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$seq == sdRNA_seq, "lfcShrunk"], NA)
+  summary_sdRNA_table$Moderate_T1_padj[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T1_mild_snoRNA$seq, DE_T1_mild_snoRNA[DE_T1_mild_snoRNA$seq == sdRNA_seq, "padj"], NA)
+  summary_sdRNA_table$Moderate_T2_LFC[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T2_mild_snoRNA$seq, DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$seq == sdRNA_seq, "lfcShrunk"], NA)
+  summary_sdRNA_table$Moderate_T2_padj[summary_sdRNA_table$seq == sdRNA_seq] <- ifelse(sdRNA_seq %in% DE_T2_mild_snoRNA$seq, DE_T2_mild_snoRNA[DE_T2_mild_snoRNA$seq == sdRNA_seq, "padj"], NA)
+}
+
+summary_sdRNA_table <- summary_sdRNA_table[order(summary_sdRNA_table$snoRNA_gene),]
+write.table(summary_sdRNA_table, "/path/to/snoRNA_results/Supp_sdRNA.tsv", sep="\t", row.names=FALSE)
+```
+

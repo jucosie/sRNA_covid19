@@ -1,0 +1,318 @@
+---
+title: "Raincloud plots sRNA families"
+author: "Julia Corell Sierra"
+date: '2022-11-28'
+output: html_document
+---
+
+```{r}
+library("tidyverse")
+library("ggplot2")
+library("scales")
+library("ggrepel")
+```
+
+Script to generate the plots of the Supplemental figure 1.
+
+```{r}
+anno_file <- read.table("/path/to/annotation_results/curated_unitas_annotation.tsv", sep="\t", header = TRUE)
+#RPMs_complete_table <- read.csv("/path/to/results/03-Fusion_tables/Fusion_RPMs-outer_with0.csv", header=T, row.names=1)
+#abs_filt_table <- read.table("/path/to/results/03-Fusion_tables/Filtered_abs-outer_filt5.tsv", sep="\t", header = TRUE)
+sampletable <- read.table("../../Additional_data/samplesheet.tsv", header=T, sep="\t")
+```
+
+Extract the sequences used for the DE analysis out of the global RPM table.
+
+```{r}
+RPMs_complete_table <- RPMs_complete_table %>%
+  rownames_to_column(var="seq")
+RPMs_table <- RPMs_complete_table %>%
+  dplyr::filter(seq %in% abs_filt_table$seq)
+
+write.table(RPMs_table, "/path/to/results/03-Fusion_tables/Filtered_RPMs-outer_filt5.tsv", sep="\t", row.names = FALSE)
+rm("RPMs_complete_table")
+```
+
+Filter out the sequences to work only with those DE in any contrast.
+
+```{r}
+padj.cutoff <- 0.05
+DE_T1_acute <- read.table("/path/to/DEA_results/results_DE_T1acute.tsv", sep="\t", header=TRUE)
+DE_T1_acute_sig <- DE_T1_acute %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T1_mild <- read.table("/path/to/DEA_results/results_DE_T1mild.tsv", sep="\t", header=TRUE)
+DE_T1_mild_sig <- DE_T1_mild %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T2_acute <- read.table("/path/to/DEA_results/results_DE_T2acute.tsv", sep="\t", header=TRUE)
+DE_T2_acute_sig <- DE_T2_acute %>%
+  dplyr::filter(padj < padj.cutoff)
+DE_T2_mild <- read.table("/path/to/DEA_results/results_DE_T2mild.tsv", sep="\t", header=TRUE)
+DE_T2_mild_sig <- DE_T2_mild %>%
+  dplyr::filter(padj < padj.cutoff)
+
+DE_seqs <- Reduce (union, list(DE_T1_acute_sig$seq, DE_T1_mild_sig$seq, DE_T2_acute_sig$seq, DE_T2_mild_sig$seq))
+```
+
+
+We want to plot the global accumulation (of the DE sequences) of each RNA family per sample.
+
+```{r}
+RPMs_global_ann_table <- merge(RPMs_table, anno_file, by.x="seq", by.y="Seq", all.x=TRUE)
+RPMs_global_ann_filt <- RPMs_global_ann_table %>%
+  dplyr::filter(seq %in% DE_seqs)
+```
+
+```{r}
+RPMs_global_ann_miRNA <- subset(RPMs_global_ann_filt, grepl("miRNA$", RPMs_global_ann_filt$RNA_class))
+
+summ_RPMs_miRNA <- data.frame(matrix(nrow = nrow(sampletable), ncol = 3))
+colnames(summ_RPMs_miRNA) <- c("Sample", "RPM", "Group")
+summ_RPMs_miRNA$Sample <- sampletable$SampleName
+summ_RPMs_miRNA$RPM <- colSums(RPMs_global_ann_miRNA[,c(2:41)])
+summ_RPMs_miRNA$Group <- c(rep("Control", 8), rep("Severe (T1)", 8), rep("Moderate (T1)", 8), rep ("Severe (T2)", 8), rep("Moderate (T2)", 8))
+```
+
+```{r}
+summ_RPMs_miRNA$Group <- factor(summ_RPMs_miRNA$Group, levels = c("Control", "Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)"))
+summ_RPMs_miRNA$Label <- gsub("T[012]\\_(acute|mild|control)-", "", summ_RPMs_miRNA$Sample)
+p <- ggplot(summ_RPMs_miRNA, aes(x = Group, y = log10(RPM), fill=Group, alpha=0.7)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA) + 
+  geom_boxplot(
+    width = .25, 
+    outlier.shape = NA
+  ) +
+  geom_point(
+    size = 3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )) + 
+  #geom_text_repel() +
+  theme_light() +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "#ED0000B2", "lightgreen", "darkgreen")) +
+  theme(plot.title = element_text(size = rel(2), hjust = 0.5),
+          axis.title = element_text(size = rel(1.75)),
+          panel.grid = element_blank()) +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(size=16, color="black"),
+          axis.text.y = element_text(size=16, color="black")) + 
+  coord_cartesian(xlim = c(1.2, NA), clip = "off") + ylab("Global accumulation (log10(RPM))") + ggtitle("miRNA") +
+  scale_y_continuous(limits = c(3,6), breaks= c(3,4,5,6))
+ggsave("/path/to/DEA_results/Visualizations/miRNA_accum_log.png", height = 7, width = 10)
+```
+
+#### Mann-Whitney tests
+
+```{r}
+##Control vs T1 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_miRNA, grepl("Control|Severe \\(T1\\)", summ_RPMs_miRNA$Group))) #W = 64, p-value = 0.0001554
+##Control vs T2 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_miRNA, grepl("Control|Severe \\(T2\\)", summ_RPMs_miRNA$Group))) #W = 64, p-value = 0.0001554
+##Control vs T1 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_miRNA, grepl("Control|Moderate \\(T1\\)", summ_RPMs_miRNA$Group))) #W = 60, p-value = 0.001865
+##Control vs T2 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_miRNA, grepl("Control|Moderate \\(T2\\)", summ_RPMs_miRNA$Group))) #W = 48, p-value = 0.1049
+```
+
+#### ANOVA
+
+```{r}
+model_miRNA <- aov(RPM ~ Group, data= subset(summ_RPMs_miRNA, !grepl("Control", summ_RPMs_miRNA$Group)))
+summary(model_miRNA)
+```
+
+#### tRNA-derived
+```{r}
+RPMs_global_ann_tRNA <- subset(RPMs_global_ann_filt, grepl("tRNA-derived", RPMs_global_ann_filt$RNA_class))
+
+summ_RPMs_tRNA <- data.frame(matrix(nrow = nrow(sampletable), ncol = 3))
+colnames(summ_RPMs_tRNA) <- c("Sample", "RPM", "Group")
+summ_RPMs_tRNA$Sample <- sampletable$SampleName
+summ_RPMs_tRNA$RPM <- colSums(RPMs_global_ann_tRNA[,c(2:41)])
+summ_RPMs_tRNA$Group <- c(rep("Control", 8), rep("Severe (T1)", 8), rep("Moderate (T1)", 8), rep ("Severe (T2)", 8), rep("Moderate (T2)", 8))
+```
+
+```{r}
+summ_RPMs_tRNA$Group <- factor(summ_RPMs_tRNA$Group, levels = c("Control", "Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)"))
+summ_RPMs_tRNA$Label <- gsub("T[012]\\_(acute|mild|control)-", "", summ_RPMs_tRNA$Sample)
+ggplot(summ_RPMs_tRNA, aes(x = Group, y = log10(RPM), fill=Group, alpha=0.7)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA) + 
+  geom_boxplot(
+    width = .25, 
+    outlier.shape = NA
+  ) +
+  geom_point(
+    size = 3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )) +
+  #geom_text_repel() +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "#ED0000B2", "lightgreen", "darkgreen")) +
+  theme_light() +
+  theme(plot.title = element_text(size = rel(2), hjust = 0.5),
+          axis.title = element_text(size = rel(1.75)),
+          panel.grid = element_blank()) +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(size=16, color="black"),
+          axis.text.y = element_text(size=16, color="black")) +
+  coord_cartesian(xlim = c(1.2, NA), clip = "off") + ylab("Global accumulation (log10(RPM))") + ggtitle("tsRNA") +
+  scale_y_continuous(limits = c(3,6), breaks= c(3,4,5,6))
+
+ggsave("/path/to/DEA_results/Visualizations/tRNA_accum_log.png", height = 7, width = 10)
+```
+#### Mann-Whitney tests
+
+```{r}
+##Control vs T1 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tRNA, grepl("Control|Severe \\(T1\\)", summ_RPMs_tRNA$Group))) #W = 19, p-value = 0.1949
+##Control vs T2 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tRNA, grepl("Control|Severe \\(T2\\)", summ_RPMs_tRNA$Group))) #W = 13, p-value = 0.04988
+##Control vs T1 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tRNA, grepl("Control|Moderate \\(T1\\)", summ_RPMs_tRNA$Group))) #W = 12, p-value = 0.03792
+##Control vs T2 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tRNA, grepl("Control|Moderate \\(T2\\)", summ_RPMs_tRNA$Group))) #W = 31, p-value = 0.9591
+```
+
+#### ANOVA
+
+```{r}
+model_tRNA <- aov(RPM ~ Group, data= subset(summ_RPMs_tRNA, !grepl("Control", summ_RPMs_tRNA$Group)))
+summary(model_tRNA)
+```
+
+
+#### tyRNAs
+```{r}
+RPMs_global_ann_tyRNA <- subset(RPMs_global_ann_filt, grepl("tyRNA$", RPMs_global_ann_filt$RNA_class))
+
+summ_RPMs_tyRNA <- data.frame(matrix(nrow = nrow(sampletable), ncol = 3))
+colnames(summ_RPMs_tyRNA) <- c("Sample", "RPM", "Group")
+summ_RPMs_tyRNA$Sample <- sampletable$SampleName
+summ_RPMs_tyRNA$RPM <- colSums(RPMs_global_ann_tyRNA[,c(2:41)])
+summ_RPMs_tyRNA$Group <- c(rep("Control", 8), rep("Severe (T1)", 8), rep("Moderate (T1)", 8), rep ("Severe (T2)", 8), rep("Moderate (T2)", 8))
+```
+
+```{r}
+summ_RPMs_tyRNA$Group <- factor(summ_RPMs_tyRNA$Group, levels = c("Control", "Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)"))
+summ_RPMs_tyRNA$Label <- gsub("T[012]\\_(acute|mild|control)-", "", summ_RPMs_tyRNA$Sample)
+ggplot(summ_RPMs_tyRNA, aes(x = Group, y = log10(RPM), fill=Group, alpha=0.7)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA) + 
+  geom_boxplot(
+    width = .25, 
+    outlier.shape = NA
+  ) +
+  geom_point(
+    size = 3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )) + theme_light() +
+  #geom_text_repel() +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "#ED0000B2", "lightgreen", "darkgreen")) +
+  theme(plot.title = element_text(size = rel(2), hjust = 0.5),
+          axis.title = element_text(size = rel(1.75)),
+          panel.grid = element_blank()) +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(size=16, color="black"),
+          axis.text.y = element_text(size=16, color="black")) + 
+  coord_cartesian(xlim = c(1.2, NA), clip = "off") + ylab("Global accumulation (log10(RPM))") + ggtitle("tyRNA") + 
+  scale_y_continuous(limits = c(0,3), breaks= c(0,1,2,3))
+
+ggsave("/path/to/DEA_results/Visualizations/tyRNA_accum_log.png", height = 7, width = 10)
+```
+#### Mann-Whitney tests
+
+```{r}
+##Control vs T1 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tyRNA, grepl("Control|Severe \\(T1\\)", summ_RPMs_tyRNA$Group))) #W = 10, p-value = 0.02067
+##Control vs T2 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tyRNA, grepl("Control|Severe \\(T2\\)", summ_RPMs_tyRNA$Group))) #W = 8, p-value = 0.01041
+##Control vs T1 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tyRNA, grepl("Control|Moderate \\(T1\\)", summ_RPMs_tyRNA$Group))) #W = 31, p-value = 0.9591
+##Control vs T2 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_tyRNA, grepl("Control|Moderate \\(T2\\)", summ_RPMs_tyRNA$Group))) #W = 30, p-value = 0.8785
+```
+
+#### ANOVA
+
+```{r}
+model_tyRNA <- aov(RPM ~ Group, data= subset(summ_RPMs_tyRNA, !grepl("Control", summ_RPMs_tyRNA$Group)))
+summary(model_tyRNA)
+```
+
+
+#### snoRNAs
+
+```{r}
+RPMs_global_ann_snoRNA <- subset(RPMs_global_ann_filt, grepl("snoRNA", RPMs_global_ann_filt$RNA_class))
+
+summ_RPMs_snoRNA <- data.frame(matrix(nrow = nrow(sampletable), ncol = 3))
+colnames(summ_RPMs_snoRNA) <- c("Sample", "RPM", "Group")
+summ_RPMs_snoRNA$Sample <- sampletable$SampleName
+summ_RPMs_snoRNA$RPM <- colSums(RPMs_global_ann_snoRNA[,c(2:41)])
+summ_RPMs_snoRNA$Group <- c(rep("Control", 8), rep("Severe (T1)", 8), rep("Moderate (T1)", 8), rep ("Severe (T2)", 8), rep("Moderate (T2)", 8))
+```
+
+```{r}
+summ_RPMs_snoRNA$Group <- factor(summ_RPMs_snoRNA$Group, levels = c("Control", "Severe (T1)", "Severe (T2)", "Moderate (T1)", "Moderate (T2)"))
+summ_RPMs_snoRNA$Label <- gsub("T[012]\\_(acute|mild|control)-", "", summ_RPMs_snoRNA$Sample)
+ggplot(summ_RPMs_snoRNA, aes(x = Group, y = log10(RPM), fill=Group, alpha=0.7)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA) + 
+  geom_boxplot(
+    width = .25, 
+    outlier.shape = NA
+  ) +
+  geom_point(
+    size = 3,
+    alpha = .3,
+    position = position_jitter(
+      seed = 1, width = .1
+    )) + 
+  #geom_text_repel() +
+  theme_light() +
+  scale_fill_manual(values=c("#00468BB2", "#da6a65", "#ED0000B2", "lightgreen", "darkgreen")) +
+  theme(plot.title = element_text(size = rel(2), hjust = 0.5),
+          axis.title = element_text(size = rel(1.75)),
+          panel.grid = element_blank()) +
+    guides(color = guide_legend(override.aes = list(size = 3))) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(size=16, color="black"),
+          axis.text.y = element_text(size=16, color="black")) + 
+  coord_cartesian(xlim = c(1.2, NA), clip = "off") + ylab("Global accumulation (log10(RPM))") + ggtitle("sdRNA") + ylim(2,5.5)
+ggsave("/path/to/DEA_results/Visualizations/snoRNA_accum_log.png", height = 7, width = 10)
+```
+
+```{r}
+##Control vs T1 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_snoRNA, grepl("Control|Severe \\(T1\\)", summ_RPMs_snoRNA$Group))) #W = 64, p-value = 0.0001554
+##Control vs T2 acute
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_snoRNA, grepl("Control|Severe \\(T2\\)", summ_RPMs_snoRNA$Group))) #WW = 64, p-value = 0.0001554
+##Control vs T1 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_snoRNA, grepl("Control|Moderate \\(T1\\)", summ_RPMs_snoRNA$Group))) #W = 62, p-value = 0.0006216
+##Control vs T2 mild
+wilcox.test(RPM ~ Group, data=subset(summ_RPMs_snoRNA, grepl("Control|Moderate \\(T2\\)", summ_RPMs_snoRNA$Group))) #W = 61, p-value = 0.001088
+```

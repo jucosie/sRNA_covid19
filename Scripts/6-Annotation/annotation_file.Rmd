@@ -1,0 +1,70 @@
+---
+title: "Annotation file"
+author: "Julia Corell Sierra"
+date: '2022-12-22'
+output: html_document
+---
+
+Taking the concatenated annotation, we will reformat some of the columns to create a table useful for the stats and plots.
+
+```{r}
+anno_file <- read.table("/path/to/annotation_results/unitas_simplified_annnotation/unitas_complete_anno.txt", sep ="\t", header = FALSE)
+db = read.table("../../Additional_data/all_sRNA_homo_sapiens.tsv", sep = "\t", stringsAsFactors = FALSE) #db output of the in-house script
+
+colnames(anno_file) <- c("Seq","RNA_ID", "Position")
+#Remove sequences with Ns
+anno_file <- anno_file[which(!grepl("N", anno_file$Seq)),]
+
+#anno_table_cols <- c("ID", "Seq", "RNA_class", "RNA_ID", "Position")
+#anno_table <- as.data.frame(matrix(nrow=nrow(anno_file), ncol=length(anno_table_cols)))
+#colnames(anno_table) <- anno_table_cols
+
+#Remove the multimaps from miRNAs and piRNAs
+anno_file$Position_new <- ifelse(grepl("[mp]iR|let", anno_file$Position), NA, anno_file$Position)
+anno_file$Position <- NULL
+colnames(anno_file) <- c("Seq","RNA_ID", "Position")
+anno_file[anno_file == ""] <- NA
+
+#Separate the RNA_ID string in RNA_class and RNA_ID
+anno_file$RNA_class <- NA
+anno_file[c("RNA_class", "RNA_ID")] <- str_split_fixed(anno_file$RNA_ID, "\\||:", 2)
+
+#Reannotate miRNAs: "real" miRNA (lenghts 20-24 nt) and miRNA-like (the rest)
+anno_file$RNA_ID <- ifelse(grepl("miR|let", anno_file$RNA_class), anno_file$RNA_class, anno_file$RNA_ID)
+anno_file$RNA_class <- ifelse(grepl("miR|let", anno_file$RNA_class), "miRNA", anno_file$RNA_class)
+
+anno_file$Length <- nchar(anno_file$Seq)
+
+anno_file$RNA_class_new <- ifelse(grepl("miRNA", anno_file$RNA_class) & (anno_file$Length < 20 | anno_file$Length > 24),
+                              "miRNA-like", anno_file$RNA_class)
+anno_file$RNA_class <- NULL
+colnames(anno_file) <- c("Seq","RNA_ID", "Position", "Length", "RNA_class")
+
+#Reannotate tRNA-derived: the same global category for every tsRNA and new column for tsRNA class
+anno_file$tRNA_class <- ifelse(grepl("tR", anno_file$RNA_class), anno_file$RNA_class, NA)
+anno_file$RNA_class_new <- ifelse(grepl("tR", anno_file$RNA_class), "tRNA-derived", anno_file$RNA_class)
+anno_file$RNA_class <- NULL
+colnames(anno_file)[colnames(anno_file) == "RNA_class_new"] <- "RNA_class"
+
+#Add a column for our IDs
+anno_file$ID <- NA
+anno_file <- anno_file[,c("ID","Seq", "Length","RNA_class","RNA_ID", "tRNA_class", "Position")]
+db = read.table("../../Additional_data/all_sRNA_homo_sapiens.tsv", sep = "\t", stringsAsFactors = FALSE)
+colnames(db) = c("hsa", "sRNA")
+matches = grr::matches(anno_file$Seq, db$sRNA, list = FALSE, all.x = T, all.y = F)
+matches = matches[order(matches$x),]
+anno_file$ID = db[matches$y, 1]
+
+write.table(anno_file, "/path/to/annotation_results/curated_unitas_annotation.tsv", sep="\t", row.names = FALSE)
+rm("db")
+```
+
+Due to the recent discovery and description of the biogenesis of so-called "tiny RNAs", we will add this category to the analysis. The criteria followed to classify this sequences as tinyRNAs is explained in the section of Material and Methods, and the code is available in the subdirectory inside the current directory `tinyRNAs`.
+
+```{r}
+anno_file <- read.table("/path/to/annotation_results/curated_unitas_annotation.tsv", sep="\t", header=TRUE)
+tiny_RNA <- read.table("/path/to/annotation_results/tiny_RNA_table.tsv", sep="\t", header=TRUE)
+anno_file$RNA_class <- ifelse(anno_file$Seq %in% tiny_RNA$sRNA, "tyRNA", anno_file$RNA_class)
+write.table(anno_file, "/path/to/annotation_results/curated_unitas_withtiny_annotation.tsv", sep="\t", row.names = FALSE)
+```
+
