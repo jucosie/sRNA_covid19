@@ -5,12 +5,6 @@ date: "2023-06-12"
 output: html_document
 ---
 
----
-title: "miRNA family tendencies"
-author: "Julia Corell"
-date: "2/12/2022"
-output: html_document
----
 
 In this script you'll find all the code necessary to produce the figures and tables related to the miRNA and tyRNA analysis.
 ```{r}
