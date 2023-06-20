@@ -2,15 +2,16 @@
 
 #SBATCH --job-name=cfg								# Job name.
 #SBATCH --output=centrifuge.log				# Standard output and error log.
-#SBATCH --partition=short								# Partition (queue)
+#SBATCH --qos short								# Partition (queue)
 #SBATCH --ntasks=1									# Run on one mode. 
 											# Don't change unless you know what you are doing.
-#SBATCH--cpus-per-task=40								# Number of tasks = cpus. 
+#SBATCH--cpus-per-task=25								# Number of tasks = cpus. 
 											# It depends on the number of process of your parallelization
 #SBATCH --time=1-00:00:00								# Time limit days-hrs:min:sec.
 #SBATCH --mem=60gb									# Job memory request.
 
-module load anaconda/anaconda3
+
+module load anaconda
 
 output_dir="/path/to/exogenous_sRNAs_results"
 unmapped_file="/path/to/exogenous_sRNAs_results/unannotated_sRNAs_unique_seqs.fa"
