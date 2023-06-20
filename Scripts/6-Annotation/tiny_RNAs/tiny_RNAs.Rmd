@@ -22,7 +22,7 @@ small_seqs$ID <- paste0(">",small_seqs$ID)
 write.table(small_seqs, "/path/to/annotation_results/tiny_RNAs/sequences_tocheck_tiny.fa", sep="\n", col.names = FALSE, row.names = FALSE, quote= FALSE)
 ```
 
-We have aligned with scram to the miRBase mature db. And now we want to select only those sequences that align to mature miRNAs (+ strand) in the positions 1 or 2.
+We have aligned with scram to the miRBase mature db (v. 22.1). And now we want to select only those sequences that align to mature miRNAs (+ strand) in the positions 1 or 2.
 
 ```{r}
 scram_13 <- read.table("/path/to/annotation_results/tiny_RNAs/tinyRNA_13.csv", sep=",", header=TRUE)
