@@ -1,4 +1,4 @@
-# sRNA_covid19 
+# Endogenous small non-coding RNAs under SARS-CoV-2 infection  
 
 This repository contains the scripts and additional files necessary to replicate the findings of the study **SARS-CoV-2 remodels the landscape of small non-coding RNAs with infection time and symptom severity**. The data have been deposited with links to BioProject accession number **PRJNA982620**. 
 
