@@ -16,7 +16,7 @@ library("ggforestplot")
 
 ```{r}
 padj.cutoff <- 0.05
-anno_file <- read.table("/path/to/annotation_results/unitas_simplified_annnotation/unitas_complete_anno.txt", sep="\t", header=TRUE)
+anno_file <- read.table("/path/to/annotation_results/unitas_simplified_annnotation/curated_unitas_withtiny_annotation.tsv", sep="\t", header=TRUE)
 DE_T1_acute <- read.table("/path/to/DEA_results/results_DE_T1acute.tsv", sep="\t", header=TRUE)
 DE_T1_acute_sig <- DE_T1_acute %>%
   dplyr::filter(padj < padj.cutoff)
