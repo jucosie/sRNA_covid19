@@ -31,9 +31,9 @@ library(DESeq2)
 ```
 
 ```{r}
-sampletable <- read.table("/home/ultramind/Disco2/SARS_sRNA_paper/Additional_data/samplesheet.tsv", header=T, sep="\t")
+sampletable <- read.table("../Additional_data/samplesheet.tsv", header=T, sep="\t")
 
-counts_table <- read.table("/home/ultramind/Disco2/SARS_sRNA_paper/Results/03-Fusion_tables/Fusion_abs-inner.csv",  header=T, sep=",")
+counts_table <- read.table("/path/to/results/03-Fusion_tables/Fusion_abs-inner.csv",  header=T, sep=",")
 counts_table <- counts_table %>%
   column_to_rownames(var="seq")
 
