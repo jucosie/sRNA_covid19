@@ -46,7 +46,7 @@ for(i in 1:length(exp_counts)){
   file_counts = exp_counts[i]
   file_RPMs = exp_RPMs[i]
   
-  ## Obtain the info: time (T1), sample (HSVd_1), group (HSVd) and n_group (1).
+  ## Obtain the info: time (T1), sample, group and n_group.
   path_file_list = unlist(strsplit(file_counts, "/"))
   time = path_file_list[length(path_file_list)-2]
   name_file = path_file_list[length(path_file_list)]
