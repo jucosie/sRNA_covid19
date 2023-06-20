@@ -1,4 +1,4 @@
-# sRNA_covid19
+# sRNA_covid19 
 
 This repository contains the scripts and additional files necessary to replicate the findings of the study **SARS-CoV-2 remodels the landscape of small non-coding RNAs with infection time and symptom severity**. The data have been deposited with links to BioProject accession number **PRJNA982620**. 
 
@@ -14,3 +14,6 @@ This repository contains the scripts and additional files necessary to replicate
 * Biopython, numpy, pandas, argparse, multiprocessing, itertools.
 ### R libraries
 * rgl, knitr, tidyverse, factoextra, ggfortify, DESeq2, ggsci, ggExtra, Biostrings, ggdist, scales, ggbreak.
+
+## Repository content
+Please refer to the specific scripts and their descriptions for detailed information on how to replicate the findings of the study. The additional files needed are provided in `Additional_data`. Database and genome versions used for classification can be found in the Material and Methods section. 
