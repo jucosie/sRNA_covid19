@@ -6,6 +6,8 @@
 # sequence                                                        #
 ###################################################################
 
+module load anaconda #An environment with Biopython installed is needed
+
 unitas_results="/path/to/unitas_results"
 unitas_anno_simp="/path/to/annotation_results/unitas_simplified_annotation"
 unitas_noann="/path/to/annotation_results/unitas_no-anno"
