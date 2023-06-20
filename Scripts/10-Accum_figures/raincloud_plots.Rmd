@@ -15,9 +15,10 @@ library("ggrepel")
 Script to generate the plots of the Supplemental figure 1.
 
 ```{r}
-anno_file <- read.table("/path/to/annotation_results/curated_unitas_annotation.tsv", sep="\t", header = TRUE)
-#RPMs_complete_table <- read.csv("/path/to/results/03-Fusion_tables/Fusion_RPMs-outer_with0.csv", header=T, row.names=1)
-#abs_filt_table <- read.table("/path/to/results/03-Fusion_tables/Filtered_abs-outer_filt5.tsv", sep="\t", header = TRUE)
+anno_file <- read.table("/path/to/annotation_results/curated_unitas_withtiny_annotation.tsv", sep="\t", header = TRUE)
+# This file has to be created the same way we did Fusion_abs-outer_with0.csv, detailed in DEA.Rmd
+RPMs_complete_table <- read.csv("/path/to/results/03-Fusion_tables/Fusion_RPMs-outer_with0.csv", header=T, row.names=1)
+abs_filt_table <- read.table("/path/to/results/03-Fusion_tables/Filtered_abs-outer_filt5.tsv", sep="\t", header = TRUE)
 sampletable <- read.table("../../Additional_data/samplesheet.tsv", header=T, sep="\t")
 ```
 
