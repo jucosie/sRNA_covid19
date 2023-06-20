@@ -365,7 +365,7 @@ ggsave("/path/to/miRNA_and_tiny_results/miR_consistent.png", height=5, width=8, 
 
 ### TinyRNAs figure
 
-The table `tiny_table_toplot_filt.tsv` was generated manually. It has the values of the lof2FC of DE tyRNAs in each group, and the log2FC (if DE) of their corresponding parental miRNA. Only those tyRNA which have a "true-miRNA" parental miRNA were considered for analysis.  
+The table `tiny_table_toplot_filt.tsv` was generated manually. It has the values of the lof2FC of DE tyRNAs in each group, and the log2FC (if DE) of their corresponding parental miRNA. Only those tyRNA which have a "true-miRNA" parental miRNA were considered for analysis. The table is provided as `Supplemental_Table_7`.   
 ```{r}
 tiny_toplot <- read.table("/path/to/miRNA_and_tiny_results/tiny_table_toplot_filt.tsv", sep="\t", header=TRUE)
 #tiny_toplot$Seq_name <- factor(tiny_toplot$Seq_name, levels=unique(tiny_toplot$Seq_name))
