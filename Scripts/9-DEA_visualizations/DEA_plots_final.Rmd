@@ -1,5 +1,5 @@
 ---
-title: "Differential Exoression Analysis plots"
+title: "Differential Expression Analysis plots"
 author: "Julia Corell Sierra"
 date: "2023-06-12"
 output: html_document
