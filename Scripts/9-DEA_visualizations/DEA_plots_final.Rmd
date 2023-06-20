@@ -313,10 +313,10 @@ T2_mild_summary <- DE_T2mild_ann %>%
   dplyr::count(Class_toplot)
 T2_mild_summary$Group <- "T2"
 
-write.table(T1_acute_summary[,-3], "/home/ultramind/Disco2/SARS_sRNA_paper/Results/09-Exogenous_sRNAs_analysis/T1_severe_summary.tsv", sep="\t", row.names=FALSE)
-write.table(T2_acute_summary[,-3], "/home/ultramind/Disco2/SARS_sRNA_paper/Results/09-Exogenous_sRNAs_analysis/T2_severe_summary.tsv", sep="\t", row.names=FALSE)
-write.table(T1_mild_summary[,-3], "/home/ultramind/Disco2/SARS_sRNA_paper/Results/09-Exogenous_sRNAs_analysis/T1_moderate_summary.tsv", sep="\t", row.names=FALSE)
-write.table(T2_mild_summary[,-3], "/home/ultramind/Disco2/SARS_sRNA_paper/Results/09-Exogenous_sRNAs_analysis/T2_moderate_summary.tsv", sep="\t", row.names=FALSE)
+write.table(T1_acute_summary[,-3], "/path/to/DEA_results/T1_severe_summary.tsv", sep="\t", row.names=FALSE)
+write.table(T2_acute_summary[,-3], "/path/to/DEA_results/T2_severe_summary.tsv", sep="\t", row.names=FALSE)
+write.table(T1_mild_summary[,-3], "/path/to/DEA_results/T1_moderate_summary.tsv", sep="\t", row.names=FALSE)
+write.table(T2_mild_summary[,-3], "/path/to/DEA_results/T2_moderate_summary.tsv", sep="\t", row.names=FALSE)
 
 acute_summary <- rbind(T1_acute_summary, T2_acute_summary)
 mild_summary <- rbind(T1_mild_summary, T2_mild_summary)
