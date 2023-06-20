@@ -2,10 +2,10 @@
 
 #SBATCH --job-name=create_tables							# Job name.
 #SBATCH --output=01-Prepare_fasta_libraries.log					# Standard output and error log.
-#SBATCH --partition=medium								# Partition (queue)
+#SBATCH --qos medium								# Partition (queue)
 #SBATCH --ntasks=1									# Run on one mode. 
 											# Don't change unless you know what you are doing.
-#SBATCH--cpus-per-task=21								# Number of tasks = cpus. 
+#SBATCH--cpus-per-task=20								# Number of tasks = cpus. 
 											# It depends on the number of process of your parallelization
 #SBATCH --time=1-00:00:00								# Time limit days-hrs:min:sec.
 #SBATCH --mem=150gb									# Job memory request.
@@ -31,7 +31,7 @@ path_libraries="/path/to/libraries"
 path_results="/path/to/results"
 path_summary="/path/to/summary_samples"
 
-module load python/3.8
+module load python/3.11
 
 python3 ./01-Prepare_fasta_libraries_and_count_tables_multiprocessing_v2.py \
 --path-libraries ${path_libraries}/ \
