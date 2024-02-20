@@ -347,7 +347,7 @@ miRNA_consist_toplot$Contrast <- factor(miRNA_consist_toplot$Contrast, levels=c(
 ```{r}
 ggplot(miRNA_consist_toplot, aes(x=Family, y=lfcShrunk, fill=Contrast)) +
   geom_boxplot(outlier.shape=NA, alpha=0.7) +
-  geom_jitter(size=1.5, shape=16, alpha=0.7) +
+  geom_jitter(size=1.5, shape=16, alpha=0.7, position = position_jitterdodge()) +
   theme_bw() +
   geom_hline(yintercept=0, color="black") +
   theme(legend.position="bottom",
