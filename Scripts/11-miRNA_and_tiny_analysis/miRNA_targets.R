@@ -2,7 +2,8 @@
 # 
 # Author: Julia Corell
 # Date: January 25, 2024
-# Description: 
+# Description: miRNA target identification and KEGG 
+# enrichment analysis
 #
 #############################################################
 
