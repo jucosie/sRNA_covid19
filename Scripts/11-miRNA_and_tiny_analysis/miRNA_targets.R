@@ -27,7 +27,8 @@ MTI_df <- readxl::read_excel(MTI_file)
 
 # We know that the stronger experimental evidences are: reporter assay,
 # western blot and qPCR
-MTI_df_exp <- MTI_df[, c("miRTarBase ID", "miRNA", "Target Gene", "Experiments")]
+#MTI_df_exp <- MTI_df[, c("miRTarBase ID", "miRNA", "Target Gene", "Experiments")]
+MTI_df_exp <- MTI_df
 
 # Separate each experiment type
 MTI_df_exp$Reporter <- ifelse(grepl("Luciferase reporter assay", MTI_df_exp$Experiments), 1, 0)
@@ -207,133 +208,32 @@ mild_genes <- unique(miRNA_mild_MTI[!is.na(miRNA_mild_MTI$`Target Gene`), "Targe
 mild_genes <- str_to_upper(mild_genes)
 
 #############################################################
-# GO enrichment
-#############################################################
+# Supplemental table
 
-# Acute
-# Convert Gene Symbols to Entrez ID
-hs <- org.Hs.eg.db
-acute_genes_entrez <- AnnotationDbi::select(hs,
-                      keys = acute_genes,
-                      columns = c("ENTREZID", "SYMBOL"),
-                      keytype = "SYMBOL")
+# Severe
+# Add the condition
+miRNA_acute_MTI$Condition <- "Severe"
+# Remove the columns used for the selection of valid MTIs
+miRNA_acute_merged <- miRNA_acute_MTI
+miRNA_acute_merged[, c("Reporter", "Western", "qPCR", "Sum_exp")] <- list(NULL)
+# Reorder the columns
+miRNA_acute_merged <- miRNA_acute_merged[, c(10,1,2,3,4,5,6,7,8,9)]
 
-# Molecular Function
-ego_acute <- enrichGO(gene = acute_genes_entrez$ENTREZID,
-                OrgDb = org.Hs.eg.db,
-                ont = "MF",
-                pAdjustMethod = "BH",
-                pvalueCutoff = 0.01,
-                qvalueCutoff = 0.05,
-                readable = TRUE)
+# Moderate
+# Add the condition
+miRNA_mild_MTI$Condition <- "Moderate"
+# Remove the columns used for the selection of valid MTIs
+miRNA_mild_merged <- miRNA_mild_MTI
+miRNA_mild_merged[, c("Reporter", "Western", "qPCR", "Sum_exp")] <- list(NULL)
+# Reorder the columns
+miRNA_mild_merged <- miRNA_mild_merged[, c(10,1,2,3,4,5,6,7,8,9)]
 
+# Concatenate both df
+miRNA_targets_supp <- rbind(miRNA_acute_merged, miRNA_mild_merged)
+# Write the supplemental table
+write.table(miRNA_targets_supp, paste0(output_dir, "/miRNA_targets_supp.tsv"),
+            sep="\t", row.names = FALSE)
 
-acute_GO_plot <- dotplot(ego_acute)
-ggsave(paste0(output_dir, "/acute_GO_MF_plot.png"))
-
-
-# Celular component
-ego_acute_CC <- enrichGO(gene = acute_genes_entrez$ENTREZID,
-                      OrgDb = org.Hs.eg.db,
-                      ont = "CC",
-                      pAdjustMethod = "BH",
-                      pvalueCutoff = 0.01,
-                      qvalueCutoff = 0.05,
-                      readable = TRUE)
-
-
-acute_GO_CC_plot <- dotplot(ego_acute_CC)
-ggsave(paste0(output_dir, "/acute_GO_CC_plot.png"))
-
-# Biological process
-ego_acute_BP <- enrichGO(gene = acute_genes_entrez$ENTREZID,
-                         OrgDb = org.Hs.eg.db,
-                         ont = "BP",
-                         pAdjustMethod = "BH",
-                         pvalueCutoff = 0.01,
-                         qvalueCutoff = 0.05,
-                         readable = TRUE)
-
-
-acute_GO_BP_plot <- dotplot(ego_acute_BP)
-ggsave(paste0(output_dir, "/acute_GO_BP_plot.png"))
-
-# Mild
-mild_genes_entrez <- AnnotationDbi::select(hs,
-                                            keys = mild_genes,
-                                            columns = c("ENTREZID", "SYMBOL"),
-                                            keytype = "SYMBOL")
-
-ego_mild <- enrichGO(gene = mild_genes_entrez$ENTREZID,
-                      OrgDb = org.Hs.eg.db,
-                      ont = "MF",
-                      pAdjustMethod = "BH",
-                      pvalueCutoff = 0.01,
-                      qvalueCutoff = 0.05,
-                      readable = TRUE)
-
-mild_GO_plot <- dotplot(ego_mild)
-ggsave(paste0(output_dir, "/mild_GO_MF_plot.png"))
-
-# Celular component
-ego_mild_CC <- enrichGO(gene = mild_genes_entrez$ENTREZID,
-                         OrgDb = org.Hs.eg.db,
-                         ont = "CC",
-                         pAdjustMethod = "BH",
-                         pvalueCutoff = 0.01,
-                         qvalueCutoff = 0.05,
-                         readable = TRUE)
-
-mild_GO_CC_plot <- dotplot(ego_mild_CC)
-ggsave(paste0(output_dir, "/mild_GO_CC_plot.png"))
-
-# Biological process
-ego_mild_BP <- enrichGO(gene = mild_genes_entrez$ENTREZID,
-                        OrgDb = org.Hs.eg.db,
-                        ont = "BP",
-                        pAdjustMethod = "BH",
-                        pvalueCutoff = 0.01,
-                        qvalueCutoff = 0.05,
-                        readable = TRUE)
-
-mild_GO_BP_plot <- dotplot(ego_mild_BP)
-ggsave(paste0(output_dir, "/mild_GO_BP_plot.png"))
-
-# Plot both conditions together
-
-# Molecular Function
-both_conditions_genes <- list("Severe" = acute_genes_entrez$ENTREZID, "Moderate" = mild_genes_entrez$ENTREZID)
-comparison_MF  <- compareCluster(geneClusters = both_conditions_genes, ont = "MF",
-                              OrgDb = org.Hs.eg.db,
-                              pAdjustMethod = "BH",
-                              pvalueCutoff  = 0.01,
-                              qvalueCutoff  = 0.05,
-                              fun =  enrichGO)
-
-both_conditions_MF_plot <- dotplot(comparison_MF, showCategory=10, font.size=10)
-ggsave(paste0(output_dir, "/acute_and_mild_GO_MF_plot.png"))
-
-# Celular component
-comparison_CC  <- compareCluster(geneClusters = both_conditions_genes, ont = "CC",
-                                 OrgDb = org.Hs.eg.db,
-                                 pAdjustMethod = "BH",
-                                 pvalueCutoff  = 0.01,
-                                 qvalueCutoff  = 0.05,
-                                 fun =  enrichGO)
-
-both_conditions_MF_plot <- dotplot(comparison_CC, showCategory=10, font.size=10)
-ggsave(paste0(output_dir, "/acute_and_mild_GO_CC_plot.png"))
-
-# Biological process
-comparison_BP  <- compareCluster(geneClusters = both_conditions_genes, ont = "BP",
-                                 OrgDb = org.Hs.eg.db,
-                                 pAdjustMethod = "BH",
-                                 pvalueCutoff  = 0.01,
-                                 qvalueCutoff  = 0.05,
-                                 fun =  enrichGO)
-
-both_conditions_BP_plot <- dotplot(comparison_BP, showCategory=10, font.size=10)
-ggsave(paste0(output_dir, "/acute_and_mild_GO_BP_plot.png"))
 
 #############################################################
 # KEGG enrichment
@@ -355,15 +255,6 @@ mild_kegg <- enrichKEGG(gene = mild_genes_entrez$ENTREZID,
 mild_kegg_dotplot <- dotplot(mild_kegg, title = "Moderate", font.size = 10)
 ggsave(paste0(output_dir, "/mild_kegg_plot.png"))
 
-# Plot both conditions together
-
-# comparison_kegg  <- compareCluster(geneClusters = both_conditions_genes,
-#                                  organism = "hsa",
-#                                  pvalueCutoff  = 0.01,
-#                                  fun =  enrichKEGG)
-# 
-# both_conditions_kegg <- dotplot(comparison_kegg, showCategory=10, font.size=10)
-# ggsave(paste0(output_dir, "/acute_and_mild_kegg_plot.png"))
 
 # Arrange individual plots together
 both_keggs <- ggarrange(acute_kegg_dotplot, mild_kegg_dotplot)
