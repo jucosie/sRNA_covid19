@@ -119,9 +119,9 @@ dtfull_FINAL = dtfull %>%
   group_by(group, time, nt) %>%
   summarise(
     mean.RPM = mean(RPM), ## Mean RPMs.
-    se.RPM = se(RPM), ## Standard deviation of RPMs.
+    se.RPM = se(RPM), ## Standard error of RPMs.
     mean.Relative = mean(percentage), ## Mean of percentage.
-    se.Relative = se(percentage)) ## Standard deviation of percentage. 
+    se.Relative = se(percentage)) ## Standard error of percentage. 
 
 ## Save the table.
 write.table(dtfull_FINAL,"/path/to/results/04-library_profiles/RPMs_and_Freq_by_ntds-FINAL.tsv",
